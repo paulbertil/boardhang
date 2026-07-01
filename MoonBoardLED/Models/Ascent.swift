@@ -33,6 +33,11 @@ final class Ascent {
     /// existing tick keeps counting as a send.
     var sent: Bool = true
 
+    /// Which board this ascent was logged on (a `MoonBoardSetup`/`Board` layout id).
+    /// Defaults to 7 (Mini MoonBoard 2025) so existing ticks — all logged before
+    /// multi-board support — back-fill to the Mini via lightweight migration.
+    var boardLayoutId: Int = 7
+
     init(date: Date = Date(),
          sourceCatalogID: String? = nil,
          problemName: String,
@@ -41,7 +46,8 @@ final class Ascent {
          tries: Int = 1,
          stars: Int = 0,
          comment: String = "",
-         sent: Bool = true) {
+         sent: Bool = true,
+         boardLayoutId: Int = 7) {
         self.id = UUID()
         self.date = date
         self.sourceCatalogID = sourceCatalogID
@@ -52,6 +58,7 @@ final class Ascent {
         self.stars = stars
         self.comment = comment
         self.sent = sent
+        self.boardLayoutId = boardLayoutId
     }
 
     /// How the voted grade compares to the official grade: +1 harder, -1 softer, 0 same/unknown.

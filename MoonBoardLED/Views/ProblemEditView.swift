@@ -7,7 +7,7 @@ struct ProblemEditView: View {
     @Environment(\.modelContext) private var context
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var ble: MoonBoardBLEManager
-    @AppStorage("boardOrientationFlipped") private var flipped = false
+    @AppStorage(Board.mini2025.flippedKey) private var flipped = false
     @AppStorage("showBeta") private var showBeta = true
 
     /// nil = creating a new problem; otherwise editing this one.
@@ -186,7 +186,7 @@ struct ProblemEditView: View {
 
     private func pushPreview() {
         guard ble.isConnected else { return }
-        ble.sendDebounced(holds: holds, flipped: flipped, showBeta: showBeta)
+        ble.sendDebounced(holds: holds, rows: BoardGeometry.rows, flipped: flipped, showBeta: showBeta)
     }
 
     private func save() {

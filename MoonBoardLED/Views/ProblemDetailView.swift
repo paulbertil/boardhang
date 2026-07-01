@@ -6,9 +6,9 @@ struct ProblemDetailView: View {
     @EnvironmentObject private var ble: MoonBoardBLEManager
     @Environment(\.modelContext) private var context
     @Environment(\.dismiss) private var dismiss
-    @AppStorage("boardOrientationFlipped") private var flipped = false
+    @AppStorage(Board.mini2025.flippedKey) private var flipped = false
     @AppStorage("showBeta") private var showBeta = true
-    @AppStorage(ActiveHoldSets.miniStorageKey) private var activeHoldSetsCSV = ""
+    @AppStorage(Board.mini2025.activeHoldSetsKey) private var activeHoldSetsCSV = ""
     @State private var showingEditor = false
     @State private var confirmingDelete = false
     @State private var showingLog = false
@@ -17,13 +17,15 @@ struct ProblemDetailView: View {
 
     let problem: Problem
 
-    private var activeHoldSets: Set<Int> {
-        ActiveHoldSets.ids(from: activeHoldSetsCSV, in: .mini2025)
+    /// User-created problems live on the Mini 2025 board.
+    private let board = Board.mini2025
+    private var renderHoldSetIDs: Set<Int> {
+        ActiveHoldSets.visible(ActiveHoldSets.ids(from: activeHoldSetsCSV, in: board), in: board)
     }
 
     var body: some View {
         VStack(spacing: 12) {
-            BoardImageView(setup: .mini2025, visibleHoldSetIDs: activeHoldSets,
+            BoardImageView(setup: board.setup, visibleHoldSetIDs: renderHoldSetIDs,
                            holds: problem.holds, showBeta: showBeta)
                 .padding(.horizontal, 8)
 
@@ -31,13 +33,13 @@ struct ProblemDetailView: View {
                 .padding(.horizontal)
                 .onChange(of: showBeta) { _, _ in
                     if ble.isConnected {
-                        ble.send(holds: problem.holds, flipped: flipped, showBeta: showBeta)
+                        ble.send(holds: problem.holds, rows: board.rows, flipped: flipped, showBeta: showBeta)
                     }
                 }
 
             HStack(spacing: 12) {
                 Button {
-                    ble.send(holds: problem.holds, flipped: flipped, showBeta: showBeta)
+                    ble.send(holds: problem.holds, rows: board.rows, flipped: flipped, showBeta: showBeta)
                 } label: {
                     Label("Light up on board", systemImage: "lightbulb.fill")
                         .frame(maxWidth: .infinity)
@@ -103,6 +105,7 @@ struct ProblemDetailView: View {
                            problemGrade: problem.grade,
                            tries: max(pendingTries, 1),
                            sent: true,
+                           boardLayoutId: board.id,
                            onComplete: { pendingTries = 0 })
         }
         .navigationTitle(problem.name)

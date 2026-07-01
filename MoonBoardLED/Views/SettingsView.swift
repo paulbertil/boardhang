@@ -6,7 +6,6 @@ import SwiftUI
 struct SettingsView: View {
     @EnvironmentObject private var ble: MoonBoardBLEManager
     @AppStorage("appAppearance") private var appearance: AppAppearance = .system
-    @AppStorage("boardOrientationFlipped") private var flipped = false
     @AppStorage("showBeta") private var showBeta = true
     @AppStorage("autoLightOnSwipe") private var autoLightOnSwipe = false
     @AppStorage("showClimbPreviews") private var showClimbPreviews = true
@@ -21,7 +20,6 @@ struct SettingsView: View {
                         ForEach(AppAppearance.allCases) { Text($0.label).tag($0) }
                     }
                     .pickerStyle(.segmented)
-                    Toggle("Flip board orientation", isOn: $flipped)
                     Toggle("Show beta", isOn: $showBeta)
                     Toggle("Show climb previews", isOn: $showClimbPreviews)
                 }

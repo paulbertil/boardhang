@@ -11,6 +11,7 @@ struct ProblemListView: View {
     @State private var showingEditor = false
     @State private var showingConnection = false
     @State private var showingTest = false
+    @State private var showingCatalog = false
 
     var body: some View {
         NavigationStack {
@@ -45,6 +46,7 @@ struct ProblemListView: View {
                 ToolbarItem(placement: .topBarTrailing) {
                     Menu {
                         Button { showingEditor = true } label: { Label("New Problem", systemImage: "plus") }
+                        Button { showingCatalog = true } label: { Label("Official Problems", systemImage: "books.vertical") }
                         Button { showingTest = true } label: { Label("LED Test / Calibration", systemImage: "lightbulb") }
                         Button { ble.clear() } label: { Label("Clear Board", systemImage: "lightbulb.slash") }
                     } label: {
@@ -60,6 +62,9 @@ struct ProblemListView: View {
             }
             .sheet(isPresented: $showingTest) {
                 LEDTestView()
+            }
+            .sheet(isPresented: $showingCatalog) {
+                CatalogListView()
             }
         }
     }

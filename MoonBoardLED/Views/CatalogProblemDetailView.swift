@@ -1,0 +1,344 @@
+import SwiftUI
+import SwiftData
+
+/// View a single official problem: header (grade, stars, setter, "sent")
+/// and the board. Read-only and purely presentational — the light-up / log /
+/// navigation actions live on the hosting `CatalogProblemPager`.
+struct CatalogProblemDetailView: View {
+    @AppStorage("showBeta") private var showBeta = true
+
+    let problem: CatalogProblem
+    /// Hold sets to show (nil = all). The catalog passes the board's active sets;
+    /// the logbook leaves it nil so ascents always show the full board.
+    var visibleHoldSetIDs: Set<Int>? = nil
+
+    /// Past ascents of this exact catalog problem, to show the "Sent" indicator.
+    @Query private var ascents: [Ascent]
+    @Query private var favorites: [FavoriteProblem]
+
+    init(problem: CatalogProblem, visibleHoldSetIDs: Set<Int>? = nil) {
+        self.problem = problem
+        self.visibleHoldSetIDs = visibleHoldSetIDs
+        let id: String? = problem.id
+        _ascents = Query(filter: #Predicate<Ascent> { $0.sourceCatalogID == id })
+        let favID = problem.id
+        _favorites = Query(filter: #Predicate<FavoriteProblem> { $0.catalogID == favID })
+    }
+
+    private var holds: [HoldAssignment] { problem.holdAssignments }
+
+    var body: some View {
+        VStack(spacing: 12) {
+            CatalogProblemRow(problem: problem,
+                              isSent: ascents.contains { $0.sent },
+                              isFavorite: !favorites.isEmpty,
+                              visibleHoldSetIDs: visibleHoldSetIDs)
+                .padding(.horizontal)
+
+            BoardImageView(setup: .mini2025, visibleHoldSetIDs: visibleHoldSetIDs,
+                           holds: holds, showBeta: showBeta)
+                .padding(.horizontal, 8)
+            Spacer(minLength: 0)
+        }
+        .padding(.top, 8)
+    }
+}
+
+/// The shared problem summary used both in the catalog list and as the header
+/// on the detail page: name (+ benchmark seal), setter/holds, stars, repeats,
+/// and the grade pill.
+struct CatalogProblemRow: View {
+    let problem: CatalogProblem
+    /// Whether to show a "Sent" indicator after the name (and benchmark icon).
+    var isSent: Bool = false
+    /// Whether to show the favorite (heart) indicator after the name.
+    var isFavorite: Bool = false
+    /// Whether to show the small board thumbnail on the left.
+    var showPreview: Bool = false
+    /// Hold sets to show in the thumbnail (nil = all). The catalog passes the
+    /// board's active sets; the logbook leaves it nil.
+    var visibleHoldSetIDs: Set<Int>? = nil
+
+    var body: some View {
+        ProblemRow(
+            name: problem.name,
+            isBenchmark: problem.isBenchmark,
+            isSent: isSent,
+            isFavorite: isFavorite,
+            holds: showPreview ? problem.holdAssignments : nil,
+            visibleHoldSetIDs: visibleHoldSetIDs,
+            meta: metaLine,
+            subtitle: problem.setter.isEmpty ? "\(problem.holds.count) holds"
+                                             : "by \(problem.setter)"
+        ) {
+            GradePill(grade: problem.grade)
+        }
+    }
+
+    /// Rating · repeats · method, dot-separated. nil when there's nothing to show.
+    private var metaLine: Text? {
+        var parts: [Text] = []
+        if problem.stars > 0 {
+            parts.append(Text("\(Image(systemName: "star.fill")) \(problem.stars)")
+                .foregroundColor(.secondary))
+        }
+        if problem.repeats > 0 {
+            parts.append(Text("\(Image(systemName: "arrow.triangle.2.circlepath")) \(problem.repeats)")
+                .foregroundColor(.secondary))
+        }
+        if let method = problem.method {
+            parts.append(Text(method).foregroundColor(.indigo))
+        }
+        return parts.isEmpty ? nil : .dotJoined(parts)
+    }
+}
+
+/// The standard accent grade pill (the problem's consensus grade).
+struct GradePill: View {
+    let grade: String
+    var body: some View {
+        Text(grade)
+            .font(.subheadline.weight(.semibold))
+            .padding(.horizontal, 10).padding(.vertical, 4)
+            .background(Color.accentColor.opacity(0.15), in: Capsule())
+    }
+}
+
+/// Hosts the catalog detail view in a horizontally swipeable, lazily-rendered
+/// pager so swiping left/right moves to the next/previous problem in the same
+/// (already filtered & sorted) list. Owns the per-problem actions: light up
+/// (toolbar), and the bottom bar (previous · log ascent · next).
+struct CatalogProblemPager: View {
+    @EnvironmentObject private var ble: MoonBoardBLEManager
+    @Environment(\.modelContext) private var context
+    @Query private var favorites: [FavoriteProblem]
+    @AppStorage("boardOrientationFlipped") private var flipped = false
+    @AppStorage("showBeta") private var showBeta = true
+    @AppStorage("autoLightOnSwipe") private var autoLightOnSwipe = false
+
+    let problems: [CatalogProblem]
+    /// Hold sets to show (nil = all). Threaded to each detail view.
+    var visibleHoldSetIDs: Set<Int>? = nil
+    @State private var currentID: String?
+    @State private var showingLog = false
+    /// Un-saved tries tapped via "Add try", and the problem they belong to.
+    /// Saved as an attempt (`sent: false`) when leaving that problem.
+    @State private var pendingTries = 0
+    @State private var pendingProblemID: String?
+    @State private var showingConnection = false
+    /// The problem currently lit on the board (set when we light up, cleared on
+    /// disconnect). Drives the lightbulb's "active" state.
+    @State private var litProblemID: String?
+
+    init(problems: [CatalogProblem], current: CatalogProblem, visibleHoldSetIDs: Set<Int>? = nil) {
+        self.problems = problems
+        self.visibleHoldSetIDs = visibleHoldSetIDs
+        _currentID = State(initialValue: current.id)
+    }
+
+    private var currentIndex: Int? {
+        problems.firstIndex { $0.id == currentID }
+    }
+
+    private var currentProblem: CatalogProblem? {
+        currentIndex.map { problems[$0] } ?? problems.first
+    }
+
+    var body: some View {
+        GeometryReader { geo in
+            ScrollView(.horizontal) {
+                LazyHStack(spacing: 0) {
+                    ForEach(problems) { problem in
+                        CatalogProblemDetailView(problem: problem, visibleHoldSetIDs: visibleHoldSetIDs)
+                            .frame(width: geo.size.width)
+                            .id(problem.id)
+                    }
+                }
+                .scrollTargetLayout()
+            }
+            .scrollTargetBehavior(.paging)
+            .scrollPosition(id: $currentID)
+            .scrollIndicators(.hidden)
+        }
+        .navigationTitle("")
+        .navigationBarTitleDisplayMode(.inline)
+        .safeAreaInset(edge: .bottom) { bottomBar }
+        .onChange(of: ble.isConnected) { _, connected in
+            if !connected { litProblemID = nil }
+        }
+        .onChange(of: currentID) { _, _ in
+            flushPending()
+            if autoLightOnSwipe && ble.isConnected { lightUp() }
+        }
+        .onDisappear { flushPending() }
+        .sheet(isPresented: $showingLog) {
+            if let p = currentProblem {
+                LogAscentSheet(sourceCatalogID: p.id,
+                               problemName: p.name,
+                               problemGrade: p.grade,
+                               tries: max(currentTries, 1),
+                               sent: true,
+                               onComplete: { pendingTries = 0; pendingProblemID = nil })
+            }
+        }
+        .sheet(isPresented: $showingConnection) {
+            ConnectionView()
+        }
+    }
+
+    private var bottomBar: some View {
+        VStack(spacing: 12) {
+            // Row 1: navigate · light · favorite.
+            HStack(spacing: 20) {
+                circleButton(systemName: "chevron.left") { go(by: -1) }
+                    .disabled((currentIndex ?? 0) <= 0)
+
+                Spacer()
+
+                circleButton(systemName: ble.isConnected ? "lightbulb.fill" : "lightbulb",
+                             tint: lightIsActive ? .blue : .primary,
+                             active: lightIsActive) {
+                    if ble.isConnected { lightUp() } else { showingConnection = true }
+                }
+
+                circleButton(systemName: isCurrentFavorite ? "heart.fill" : "heart",
+                             tint: isCurrentFavorite ? .pink : .primary,
+                             active: isCurrentFavorite) {
+                    toggleFavorite()
+                }
+                .disabled(currentProblem == nil)
+
+                Spacer()
+
+                circleButton(systemName: "chevron.right") { go(by: 1) }
+                    .disabled((currentIndex ?? problems.count - 1) >= problems.count - 1)
+            }
+
+            // Row 2: logging.
+            HStack(spacing: 16) {
+                HStack(spacing: 8) {
+                    if currentTries > 0 {
+                        Button { removeTry() } label: {
+                            Image(systemName: "minus.circle.fill")
+                                .font(.title2)
+                                .foregroundStyle(.secondary)
+                        }
+                        .buttonStyle(.plain)
+                        .transition(.scale.combined(with: .opacity))
+                    }
+
+                    Button { addTry() } label: {
+                        Label(currentTries > 0 ? "Log try · \(currentTries)" : "Log try",
+                              systemImage: "plus.circle.fill")
+                            .lineLimit(1)
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.large)
+                    .tint(.primary)
+                }
+                .animation(.easeInOut(duration: 0.15), value: currentTries > 0)
+
+                Button { showingLog = true } label: {
+                    Label("Log ascent", systemImage: "checkmark.circle.fill")
+                        .lineLimit(1)
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.large)
+            }
+        }
+        .padding(.horizontal)
+        .padding(.vertical, 10)
+        .background(Color(.systemBackground).ignoresSafeArea(edges: .bottom))
+    }
+
+    /// True when the board is connected and lit with the problem on screen.
+    private var lightIsActive: Bool {
+        ble.isConnected && litProblemID != nil && litProblemID == currentProblem?.id
+    }
+
+    private func circleButton(systemName: String,
+                              tint: Color = .primary,
+                              active: Bool = false,
+                              action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: systemName)
+                .font(.headline)
+                .foregroundStyle(tint)
+                .frame(width: 48, height: 48)
+                .background((active ? tint.opacity(0.25) : Color.primary.opacity(0.1)), in: Circle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func lightUp() {
+        guard let p = currentProblem else { return }
+        ble.send(holds: p.holdAssignments, flipped: flipped, showBeta: showBeta)
+        litProblemID = p.id
+    }
+
+    /// Pending tries that belong to the problem currently on screen (0 if the
+    /// pending count is for some other problem).
+    private var currentTries: Int {
+        pendingProblemID == currentID ? pendingTries : 0
+    }
+
+    private func addTry() {
+        if pendingProblemID != currentID {
+            flushPending()
+            pendingProblemID = currentID
+            pendingTries = 0
+        }
+        pendingTries += 1
+    }
+
+    /// Undo an accidental "Log try" tap.
+    private func removeTry() {
+        guard currentTries > 0 else { return }
+        pendingTries -= 1
+        if pendingTries == 0 { pendingProblemID = nil }
+    }
+
+    /// Save any pending tries for `pendingProblemID` as an attempt, then reset.
+    private func flushPending() {
+        guard pendingTries > 0, let id = pendingProblemID,
+              let p = problems.first(where: { $0.id == id }) else {
+            pendingTries = 0
+            pendingProblemID = nil
+            return
+        }
+        let ascent = Ascent(sourceCatalogID: p.id,
+                            problemName: p.name,
+                            problemGrade: p.grade,
+                            votedGrade: p.grade,
+                            tries: pendingTries,
+                            sent: false)
+        context.insert(ascent)
+        pendingTries = 0
+        pendingProblemID = nil
+    }
+
+    /// Whether the on-screen problem is currently favorited.
+    private var isCurrentFavorite: Bool {
+        guard let id = currentProblem?.id else { return false }
+        return favorites.contains { $0.catalogID == id }
+    }
+
+    private func toggleFavorite() {
+        guard let id = currentProblem?.id else { return }
+        if let existing = favorites.first(where: { $0.catalogID == id }) {
+            context.delete(existing)
+        } else {
+            context.insert(FavoriteProblem(catalogID: id))
+        }
+    }
+
+    /// Move to the previous (-1) / next (+1) problem, mirroring a swipe.
+    private func go(by delta: Int) {
+        guard let idx = currentIndex else { return }
+        let target = idx + delta
+        guard problems.indices.contains(target) else { return }
+        withAnimation { currentID = problems[target].id }
+    }
+}

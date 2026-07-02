@@ -74,10 +74,18 @@ struct HomeView: View {
                     // pills always render, so you can switch back to a board with
                     // ascents.
                     if filteredAscents.isEmpty {
-                        ContentUnavailableView {
-                            Label("No ascents yet", systemImage: "book.closed")
-                        } description: {
-                            Text("Log an ascent from a problem to start your logbook.")
+                        if BoardFilter.selected(from: boardFilterCSV).isEmpty {
+                            ContentUnavailableView {
+                                Label("No boards selected", systemImage: "square.grid.3x3")
+                            } description: {
+                                Text("Tap a board below to see its ascents.")
+                            }
+                        } else {
+                            ContentUnavailableView {
+                                Label("No ascents yet", systemImage: "book.closed")
+                            } description: {
+                                Text("Log an ascent from a problem to start your logbook.")
+                            }
                         }
                     } else if filteredAscents.contains(where: \.sent) {
                         GradePyramidView(ascents: filteredAscents)

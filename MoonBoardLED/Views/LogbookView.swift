@@ -17,6 +17,11 @@ struct LogbookView: View {
 
     @State private var editing: Ascent?
 
+    /// Added boards — the filter is only worth showing when there's more than one.
+    private var addedBoards: [Board] { AddedBoards.boards(from: addedCSV) }
+    /// Board ids currently shown (drives the empty-state copy).
+    private var selectedBoardIDs: Set<Int> { BoardFilter.selected(from: boardFilterCSV) }
+
     /// Ascents included by the current board filter.
     private var ascents: [Ascent] {
         let selected = BoardFilter.selected(from: boardFilterCSV)
@@ -47,10 +52,18 @@ struct LogbookView: View {
     var body: some View {
         Group {
             if ascents.isEmpty {
-                ContentUnavailableView {
-                    Label("No ascents yet", systemImage: "book.closed")
-                } description: {
-                    Text("Log an ascent from a problem to start your logbook.")
+                if selectedBoardIDs.isEmpty {
+                    ContentUnavailableView {
+                        Label("No boards selected", systemImage: "square.grid.3x3")
+                    } description: {
+                        Text("Tap a board above to see its ascents.")
+                    }
+                } else {
+                    ContentUnavailableView {
+                        Label("No ascents yet", systemImage: "book.closed")
+                    } description: {
+                        Text("Log an ascent from a problem to start your logbook.")
+                    }
                 }
             } else {
                 ScrollViewReader { proxy in
@@ -89,13 +102,13 @@ struct LogbookView: View {
         }
         .navigationTitle("Logbook")
         .navigationBarTitleDisplayMode(.inline)
+        // Which-board filter lives in a sticky bar under the nav bar (like the
+        // catalog), so the current board selection is always visible. Only worth
+        // showing when there's more than one board to choose between.
+        .safeAreaInset(edge: .top, spacing: 0) {
+            if addedBoards.count > 1 { boardFilterBar }
+        }
         .toolbar {
-            // Only worth filtering when there's more than one board.
-            if AddedBoards.boards(from: addedCSV).count > 1 {
-                ToolbarItem(placement: .topBarLeading) {
-                    BoardFilterMenu()
-                }
-            }
             ToolbarItem(placement: .topBarTrailing) {
                 Button { showClimbPreviews.toggle() } label: {
                     Image(systemName: showClimbPreviews ? "square.grid.2x2.fill" : "square.grid.2x2")
@@ -105,6 +118,15 @@ struct LogbookView: View {
         .sheet(item: $editing) { ascent in
             LogAscentSheet(editing: ascent)
         }
+    }
+
+    /// Always-visible board filter, sitting just under the nav bar. Reuses the
+    /// same `BoardFilterPills` as Home so the two rows look identical.
+    private var boardFilterBar: some View {
+        BoardFilterPills()
+            .padding(.horizontal)
+            .padding(.vertical, 8)
+            .background(.bar)
     }
 
     /// Tapping a row opens its problem in the swipeable detail pager (all hold sets

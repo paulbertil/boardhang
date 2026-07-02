@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftData
+import UIKit
 
 /// Browse the bundled, read-only catalog of official Mini MoonBoard 2025
 /// problems. Separate from the user's own problems — view and light only.
@@ -152,6 +153,9 @@ struct CatalogListView: View {
     @State private var showingRecent = false
     /// Whether the filter FAB is fanned open into its radial quick-filter menu.
     @State private var filtersExpanded = false
+    /// Height of the on-screen keyboard, so the FABs can lift clear of the search
+    /// bar (which rises with the keyboard) instead of hiding behind its ✕ button.
+    @State private var keyboardHeight: CGFloat = 0
     /// Problem chosen in the recent sheet, opened after the sheet dismisses.
     @State private var pendingRecent: CatalogProblem?
     /// Drives navigation to the problem pager, built lazily on tap.
@@ -379,12 +383,19 @@ struct CatalogListView: View {
             .safeAreaInset(edge: .top, spacing: 0) {
                 if filtersActive { activeFilterBar }
             }
-            // No toolbar items: any trailing button makes the search-role tab
-            // auto-minimize its field into a pill. Filters live in a floating
-            // button instead (below); the climb-preview toggle is in the sheet.
+            // The climb-preview toggle lives in the nav bar; filters live in a
+            // floating button (below) rather than the toolbar.
             // Alignment matters: without it the overlay centers, and the FAB
             // only *looks* anchored while the expanded scrim stretches the
             // ZStack full-screen — collapsed, it floats mid-screen.
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button { showClimbPreviews.toggle() } label: {
+                        Image(systemName: showClimbPreviews ? "square.grid.2x2.fill" : "square.grid.2x2")
+                    }
+                    .accessibilityLabel(showClimbPreviews ? "Hide climb previews" : "Show climb previews")
+                }
+            }
             .overlay(alignment: .bottomTrailing) {
                 if loadedCatalog != nil && !catalog.problems.isEmpty {
                     filterMenuOverlay
@@ -532,7 +543,21 @@ struct CatalogListView: View {
             }
         }
         .padding(.trailing, 18)
-        .padding(.bottom, 18)
+        // SwiftUI's keyboard avoidance already lifts this overlay to just above the
+        // keyboard — which lands it right beside the search bar (and its ✕ clear
+        // button) that rides up with the keyboard. Add the search bar's height on
+        // top so the FABs clear it, keeping a steady gap above the search bar.
+        .padding(.bottom, 18 + (keyboardHeight > 0 ? 60 : 0))
+        .animation(.easeOut(duration: 0.25), value: keyboardHeight)
+        .onReceive(NotificationCenter.default.publisher(
+            for: UIResponder.keyboardWillShowNotification)) { note in
+            let frame = note.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect
+            keyboardHeight = frame?.height ?? 0
+        }
+        .onReceive(NotificationCenter.default.publisher(
+            for: UIResponder.keyboardWillHideNotification)) { _ in
+            keyboardHeight = 0
+        }
     }
 
     /// Offset of the chip at `index` from the FAB: a vertical column climbing
@@ -652,9 +677,6 @@ struct CatalogListView: View {
     private var filterSheet: some View {
         NavigationStack {
             Form {
-                Section("Display") {
-                    Toggle("Show climb previews", isOn: $showClimbPreviews)
-                }
                 Section {
                     HStack {
                         Text("Grade range")

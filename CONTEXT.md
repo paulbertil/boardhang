@@ -103,8 +103,13 @@ given wiring.
   Search tab bumps a `focusToken` passed into `CatalogListView` to auto-raise the
   keyboard. `SearchTab` keys its content by board id so changing the active board
   rebuilds the stack + re-reads that board's angle.
-- `Views/HomeView.swift` — Boards section (tap a row to make it the active board;
-  checkmark marks it — rows no longer navigate) + Logbook. Angle picker stays inline.
+- `Views/HomeView.swift` — Boards section (tap a row to activate it + open its
+  catalog; an "Active" marker shows which) + Logbook. Swipe a row to edit it
+  (`HoldSetEditorView`).
+- `Views/HoldSetEditorView.swift` — per-board editor sheet (titled with the board
+  name): **Angle** segmented picker (multi-angle boards only) + installed hold-set
+  toggles, over a live preview. The angle lives here, not inline on the Home row
+  (the row subtitle still displays it).
 - `Views/CatalogListView.swift` — browse the active board's catalog (search, grade
   filter, hold sets, sort, favorites, previews). Lives in the Search tab. Floating
   search bar pinned bottom via `safeAreaInset`; a leading ✕ appears when focused

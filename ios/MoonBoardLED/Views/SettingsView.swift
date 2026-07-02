@@ -5,6 +5,7 @@ import SwiftUI
 /// orientation / beta display toggles.
 struct SettingsView: View {
     @EnvironmentObject private var ble: MoonBoardBLEManager
+    @EnvironmentObject private var auth: AuthManager
     @AppStorage("appAppearance") private var appearance: AppAppearance = .system
     @AppStorage("autoLightOnSwipe") private var autoLightOnSwipe = false
     @AppStorage("showClimbPreviews") private var showClimbPreviews = true
@@ -14,6 +15,8 @@ struct SettingsView: View {
     var body: some View {
         NavigationStack {
             Form {
+                AccountSection()
+
                 Section("Display") {
                     Picker("Appearance", selection: $appearance) {
                         ForEach(AppAppearance.allCases) { Text($0.label).tag($0) }
@@ -68,5 +71,104 @@ struct SettingsView: View {
                 ConnectionView()
             }
         }
+    }
+}
+
+/// The Account section of Settings. Signed-out shows a sign-in entry; signed-in shows
+/// the profile summary with edit / sign out / delete. The middle state (signed in, no
+/// profile yet) nudges the user to finish setup. Auth is optional — everything else in
+/// the app works signed-out.
+private struct AccountSection: View {
+    @EnvironmentObject private var auth: AuthManager
+    @State private var showingSignIn = false
+    @State private var showingProfileSetup = false
+    @State private var confirmingSignOut = false
+    @State private var confirmingDelete = false
+    @State private var isDeleting = false
+    @State private var actionError: String?
+
+    var body: some View {
+        Section {
+            switch auth.status {
+            case .signedOut:
+                Button {
+                    showingSignIn = true
+                } label: {
+                    Label("Sign in", systemImage: "person.crop.circle.badge.plus")
+                }
+
+            case .signedInNoProfile:
+                Button {
+                    showingProfileSetup = true
+                } label: {
+                    Label("Finish setting up your profile", systemImage: "person.crop.circle.badge.exclamationmark")
+                }
+                Button(role: .destructive) { confirmingSignOut = true } label: {
+                    Text("Sign out")
+                }
+
+            case .signedInWithProfile:
+                NavigationLink {
+                    ProfileView()
+                } label: {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(auth.profile?.displayName.isEmpty == false
+                             ? auth.profile!.displayName
+                             : "@\(auth.profile?.handle ?? "")")
+                            .font(.body)
+                        if auth.profile?.displayName.isEmpty == false {
+                            Text("@\(auth.profile?.handle ?? "")")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
+                Button(role: .destructive) { confirmingSignOut = true } label: {
+                    Text("Sign out")
+                }
+                Button(role: .destructive) { confirmingDelete = true } label: {
+                    if isDeleting {
+                        ProgressView()
+                    } else {
+                        Text("Delete account")
+                    }
+                }
+                .disabled(isDeleting)
+            }
+        } header: {
+            Text("Account")
+        } footer: {
+            if let actionError {
+                Text(actionError).foregroundStyle(.red)
+            }
+        }
+        .sheet(isPresented: $showingSignIn) { SignInView() }
+        .sheet(isPresented: $showingProfileSetup) { ProfileSetupView() }
+        .confirmationDialog("Sign out?", isPresented: $confirmingSignOut, titleVisibility: .visible) {
+            Button("Sign out", role: .destructive) { Task { await signOut() } }
+            Button("Cancel", role: .cancel) {}
+        }
+        .confirmationDialog(
+            "Delete account? This permanently removes your profile and cannot be undone.",
+            isPresented: $confirmingDelete,
+            titleVisibility: .visible
+        ) {
+            Button("Delete account", role: .destructive) { Task { await deleteAccount() } }
+            Button("Cancel", role: .cancel) {}
+        }
+    }
+
+    private func signOut() async {
+        actionError = nil
+        do { try await auth.signOut() }
+        catch { actionError = error.localizedDescription }
+    }
+
+    private func deleteAccount() async {
+        actionError = nil
+        isDeleting = true
+        defer { isDeleting = false }
+        do { try await auth.deleteAccount() }
+        catch { actionError = "Couldn't delete your account. Please try again." }
     }
 }

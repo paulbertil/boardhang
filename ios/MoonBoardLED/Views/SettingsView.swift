@@ -98,13 +98,24 @@ private struct AccountSection: View {
     @ViewBuilder
     private var accountSection: some View {
         Section {
-            switch auth.status {
-            case .signedOut:
-                Button {
-                    showingSignIn = true
-                } label: {
-                    Label("Sign in", systemImage: "person.crop.circle.badge.plus")
+            if auth.isRestoring {
+                // Session restore runs async on launch. Until it resolves, don't offer
+                // "Sign in" — otherwise a user with a saved session taps it and the sheet
+                // slams shut the instant the restored session lands (SignInView's
+                // auto-dismiss on a non-signedOut status).
+                HStack {
+                    Text("Checking sign-in…").foregroundStyle(.secondary)
+                    Spacer()
+                    ProgressView()
                 }
+            } else {
+                switch auth.status {
+                case .signedOut:
+                    Button {
+                        showingSignIn = true
+                    } label: {
+                        Label("Sign in", systemImage: "person.crop.circle.badge.plus")
+                    }
 
             case .signedInNoProfile:
                 Button {
@@ -143,6 +154,7 @@ private struct AccountSection: View {
                     }
                 }
                 .disabled(isDeleting)
+                }
             }
         } header: {
             Text("Account")

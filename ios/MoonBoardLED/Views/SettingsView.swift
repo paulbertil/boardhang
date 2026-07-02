@@ -88,6 +88,15 @@ private struct AccountSection: View {
     @State private var actionError: String?
 
     var body: some View {
+        // No backend configured in this build → no auth entry point at all. The rest
+        // of Settings (and the app) stays fully usable.
+        if auth.isConfigured || auth.status != .signedOut {
+            accountSection
+        }
+    }
+
+    @ViewBuilder
+    private var accountSection: some View {
         Section {
             switch auth.status {
             case .signedOut:

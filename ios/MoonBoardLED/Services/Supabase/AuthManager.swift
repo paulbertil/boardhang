@@ -9,7 +9,9 @@ import Supabase
 /// hangs off this one object so the rest of the app never talks to the SDK directly.
 ///
 /// Auth is purely additive: the app is fully usable signed-out, so nothing here ever
-/// blocks the offline BLE / catalog / local-logbook experience.
+/// blocks the offline BLE / catalog / local-logbook experience. If the app is built
+/// without Supabase config, `isConfigured` is false, the manager stays inert
+/// (`signedOut`), and every sign-in method throws `AuthError.notConfigured`.
 @MainActor
 final class AuthManager: ObservableObject {
 
@@ -31,10 +33,20 @@ final class AuthManager: ObservableObject {
     /// True during initial session restore, so the UI can avoid flashing signed-out.
     @Published private(set) var isRestoring = true
 
+    /// Whether this build has Supabase credentials. When false, all sign-in surfaces
+    /// should be disabled rather than invoked (they'd throw `.notConfigured`).
+    var isConfigured: Bool { client != nil }
+
+    /// nil when the app is built without Supabase config — see SupabaseClientProvider.
     private let client = SupabaseClientProvider.shared
     private var authStateTask: Task<Void, Never>?
 
     init() {
+        guard let client else {
+            // No backend configured: stay inert and usable. Nothing to restore.
+            isRestoring = false
+            return
+        }
         // Listen for auth changes for the whole app lifetime. `.initialSession` fires
         // once on subscribe with the restored (or absent) session, which doubles as
         // our launch-time session restore — no separate bootstrap call needed.
@@ -53,6 +65,7 @@ final class AuthManager: ObservableObject {
     /// Email magic link: Supabase mails a one-time link that deep-links back via the
     /// custom URL scheme; `handleCallback(url:)` completes the sign-in.
     func signInWithMagicLink(email: String) async throws {
+        let client = try requireClient()
         try await client.auth.signInWithOTP(
             email: email.trimmingCharacters(in: .whitespacesAndNewlines),
             redirectTo: SupabaseConfig.redirectURL
@@ -63,6 +76,7 @@ final class AuthManager: ObservableObject {
     /// exchanges the code for a session itself — no manual callback handling needed for
     /// this path (unlike the magic link, which returns through the app's URL handler).
     func signInWithGoogle() async throws {
+        let client = try requireClient()
         try await client.auth.signInWithOAuth(
             provider: .google,
             redirectTo: SupabaseConfig.redirectURL
@@ -88,6 +102,7 @@ final class AuthManager: ObservableObject {
     /// hands back to the app). Exchanges the URL for a session; no-op for unrelated
     /// URLs. Call from the app's `.onOpenURL`.
     func handleCallback(url: URL) async {
+        guard let client else { return }
         do {
             try await client.auth.session(from: url)
         } catch {
@@ -99,6 +114,7 @@ final class AuthManager: ObservableObject {
     // MARK: - Session lifecycle
 
     func signOut() async throws {
+        let client = try requireClient()
         try await client.auth.signOut()
     }
 
@@ -106,6 +122,7 @@ final class AuthManager: ObservableObject {
     /// to the `profiles` row) and then clears the local session. App Store Guideline
     /// 5.1.1(v).
     func deleteAccount() async throws {
+        let client = try requireClient()
         try await client.rpc("delete_user").execute()
         try? await client.auth.signOut()
     }
@@ -114,6 +131,7 @@ final class AuthManager: ObservableObject {
 
     /// Whether `handle` is free (case-insensitively). Call after format validation.
     func isHandleAvailable(_ handle: String) async throws -> Bool {
+        let client = try requireClient()
         let normalized = HandleRules.normalize(handle)
         let response = try await client
             .from("profiles")
@@ -127,6 +145,7 @@ final class AuthManager: ObservableObject {
     /// This is the ONLY place a `profiles` row is created — client-side, after a valid
     /// handle is chosen (no null-handle rows, no auto-create trigger).
     func saveProfile(handle: String, displayName: String) async throws {
+        let client = try requireClient()
         guard let userID = client.auth.currentUser?.id else {
             throw AuthError.notSignedIn
         }
@@ -141,6 +160,11 @@ final class AuthManager: ObservableObject {
 
     // MARK: - Internal
 
+    private func requireClient() throws -> SupabaseClient {
+        guard let client else { throw AuthError.notConfigured }
+        return client
+    }
+
     private func handle(event: AuthChangeEvent, session: Session?) async {
         isRestoring = false
         guard session != nil else {
@@ -153,8 +177,14 @@ final class AuthManager: ObservableObject {
     }
 
     /// Loads the current user's profile row and moves the status machine accordingly.
+    ///
+    /// Distinguishes "row genuinely absent" (empty result → `.signedInNoProfile`) from
+    /// "request failed" (a thrown error). On failure we do NOT wipe a known profile —
+    /// re-showing `ProfileSetupView` to an established user over a transient network
+    /// blip risks an accidental rename. We only fall back to `.signedInNoProfile` when
+    /// we never had a profile this session.
     private func refreshProfile() async {
-        guard let userID = client.auth.currentUser?.id else {
+        guard let client, let userID = client.auth.currentUser?.id else {
             status = .signedOut
             profile = nil
             return
@@ -171,15 +201,14 @@ final class AuthManager: ObservableObject {
                 profile = row
                 status = .signedInWithProfile
             } else {
+                // Genuinely no row yet.
                 profile = nil
                 status = .signedInNoProfile
             }
         } catch {
-            // Network hiccup while signed in: keep the session but treat as
-            // profile-pending so the setup gate can retry rather than dropping to
-            // signed-out.
-            profile = nil
-            status = .signedInNoProfile
+            // Request failed. Keep whatever we already knew; only default to the
+            // no-profile gate if we've never resolved a profile this session.
+            if profile == nil { status = .signedInNoProfile }
         }
     }
 }
@@ -198,11 +227,14 @@ private struct ProfileUpsert: Encodable {
 }
 
 enum AuthError: LocalizedError {
+    case notConfigured
     case notSignedIn
     case appleSignInUnavailable
 
     var errorDescription: String? {
         switch self {
+        case .notConfigured:
+            return "Sign-in isn't set up in this build — see docs/social-accounts-login-SETUP.md."
         case .notSignedIn:
             return "You need to be signed in to do that."
         case .appleSignInUnavailable:

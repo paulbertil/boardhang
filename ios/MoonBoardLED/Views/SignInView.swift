@@ -28,7 +28,16 @@ struct SignInView: View {
                         .foregroundStyle(.secondary)
                 }
 
-                if magicLinkSent {
+                if !auth.isConfigured {
+                    Section {
+                        Label {
+                            Text("Sign-in isn't set up in this build. See docs/social-accounts-login-SETUP.md.")
+                        } icon: {
+                            Image(systemName: "exclamationmark.triangle")
+                                .foregroundStyle(.orange)
+                        }
+                    }
+                } else if magicLinkSent {
                     Section {
                         Label {
                             Text("Check your email for a sign-in link, then return to the app.")
@@ -53,7 +62,7 @@ struct SignInView: View {
                                 if isWorking { ProgressView() }
                             }
                         }
-                        .disabled(!emailLooksValid || isWorking)
+                        .disabled(!emailLooksValid || isWorking || !auth.isConfigured)
                     }
                 }
 
@@ -63,7 +72,7 @@ struct SignInView: View {
                     } label: {
                         Label("Continue with Google", systemImage: "globe")
                     }
-                    .disabled(isWorking)
+                    .disabled(isWorking || !auth.isConfigured)
                 } footer: {
                     if let errorMessage {
                         Text(errorMessage).foregroundStyle(.red)

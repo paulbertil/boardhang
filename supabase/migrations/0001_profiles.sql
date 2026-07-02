@@ -9,8 +9,11 @@
 -- tables with FKs back to profiles.id; nothing here should box those in.
 
 -- citext gives us case-insensitive handle uniqueness ("Alex" == "alex") without a
--- separate lower() index. Ships with Supabase/Postgres; just needs enabling.
-create extension if not exists citext;
+-- separate lower() index. Ships with Supabase/Postgres; just needs enabling. Installed
+-- into the `extensions` schema (Supabase convention — avoids the "extension in public"
+-- linter warning). The `extensions` schema is on the default search_path, so the
+-- `citext` type below still resolves unqualified.
+create extension if not exists citext with schema extensions;
 
 create table if not exists public.profiles (
     id           uuid        primary key references auth.users (id) on delete cascade,

@@ -15,3 +15,6 @@ xcuserdata/
 .build/
 Packages/
 Package.resolved
+
+# PWA Supabase credentials — real config is local-only; commit only the *.example.
+web/.env

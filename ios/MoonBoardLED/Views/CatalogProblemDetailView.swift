@@ -17,7 +17,7 @@ struct CatalogProblemDetailView: View {
     var selectedHolds: Set<String> = []
 
     /// Past ascents of this exact catalog problem, to show the "Sent" indicator.
-    @Query private var ascents: [Ascent]
+    @Query(filter: #Predicate<Ascent> { !$0.tombstoned }) private var ascents: [Ascent]
     @Query private var favorites: [FavoriteProblem]
 
     init(problem: CatalogProblem, setup: MoonBoardSetup = .mini2025,
@@ -121,6 +121,7 @@ struct GradePill: View {
 /// (toolbar), and the bottom bar (previous · log ascent · next).
 struct CatalogProblemPager: View {
     @EnvironmentObject private var ble: MoonBoardBLEManager
+    @EnvironmentObject private var sync: LogbookSyncManager
     @Environment(\.modelContext) private var context
     @Query private var favorites: [FavoriteProblem]
     @AppStorage private var flipped: Bool
@@ -350,28 +351,27 @@ struct CatalogProblemPager: View {
         pendingTries = 0
         pendingProblemID = nil
 
-        if let existing = todaysAttempt(catalogID: p.id) {
-            existing.tries += tries
+        let day = Date()
+        // Deterministic id (per catalog problem + UTC day) so the same-day attempt
+        // converges to one row across devices AND the local merge keys off the exact
+        // same bucket the server does — no local-calendar vs UTC drift (#12).
+        let attemptID = AscentSyncID.attemptID(problemIdentity: p.id, day: day)
+        if let existing = LogbookSession.attemptRow(id: attemptID, in: context) {
+            LogbookSession.revive(existing, tries: tries, date: day)
         } else {
-            context.insert(Ascent(sourceCatalogID: p.id,
-                                  problemName: p.name,
-                                  problemGrade: p.grade,
-                                  votedGrade: p.grade,
-                                  tries: tries,
-                                  sent: false,
-                                  boardLayoutId: board.id))
+            let attempt = Ascent(date: day,
+                                 sourceCatalogID: p.id,
+                                 problemName: p.name,
+                                 problemGrade: p.grade,
+                                 votedGrade: p.grade,
+                                 tries: tries,
+                                 sent: false,
+                                 boardLayoutId: board.id,
+                                 id: attemptID)
+            attempt.markDirty()
+            context.insert(attempt)
         }
-    }
-
-    /// The un-sent attempt logged today for this catalog problem, if any.
-    private func todaysAttempt(catalogID: String) -> Ascent? {
-        let target: String? = catalogID
-        let descriptor = FetchDescriptor<Ascent>(
-            predicate: #Predicate { $0.sent == false && $0.sourceCatalogID == target }
-        )
-        guard let matches = try? context.fetch(descriptor) else { return nil }
-        let cal = Calendar.current
-        return matches.first { cal.isDate($0.date, inSameDayAs: Date()) }
+        sync.pushSoon()
     }
 
     /// Whether the on-screen problem is currently favorited.

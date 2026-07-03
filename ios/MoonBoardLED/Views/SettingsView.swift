@@ -120,10 +120,12 @@ enum SettingsSheet: Identifiable {
 /// the app works signed-out.
 private struct AccountSection: View {
     @EnvironmentObject private var auth: AuthManager
+    @EnvironmentObject private var sync: LogbookSyncManager
     /// The Settings-wide sheet slot, owned by `SettingsView`. The account buttons
     /// set it; a single `.sheet(item:)` up there does the presenting.
     @Binding var activeSheet: SettingsSheet?
     @State private var confirmingSignOut = false
+    @State private var confirmingUnsyncedSignOut = false
     @State private var confirmingDelete = false
     @State private var isDeleting = false
     @State private var actionError: String?
@@ -208,8 +210,18 @@ private struct AccountSection: View {
             Button("Sign out", role: .destructive) { Task { await signOut() } }
             Button("Cancel", role: .cancel) {}
         }
+        // Sign-out clears this device's cached logbook; guard the offline + unsynced
+        // case so a logged ascent that never reached the cloud isn't silently dropped.
         .confirmationDialog(
-            "Delete account? This permanently removes your profile and cannot be undone.",
+            "Some logbook changes haven't synced yet and will be lost. Sign out anyway?",
+            isPresented: $confirmingUnsyncedSignOut,
+            titleVisibility: .visible
+        ) {
+            Button("Sign out and discard", role: .destructive) { Task { await performSignOut() } }
+            Button("Cancel", role: .cancel) {}
+        }
+        .confirmationDialog(
+            "Delete account? This permanently removes your account and cloud logbook. Your logbook stays on this device.",
             isPresented: $confirmingDelete,
             titleVisibility: .visible
         ) {
@@ -218,17 +230,40 @@ private struct AccountSection: View {
         }
     }
 
+    /// Sign-out (R7): push anything unsynced first. If it can't (offline), warn before
+    /// clearing the local cache; otherwise clear and sign out. Cloud copy is untouched.
     private func signOut() async {
         actionError = nil
+        if sync.hasUnsyncedChanges {
+            await sync.syncNow()               // best-effort push
+            if sync.hasUnsyncedChanges {       // still dirty → offline; ask before discarding
+                confirmingUnsyncedSignOut = true
+                return
+            }
+        }
+        await performSignOut()
+    }
+
+    private func performSignOut() async {
+        await sync.clearLocalSyncedCacheAfterFlush()
         do { try await auth.signOut() }
         catch { actionError = error.localizedDescription }
     }
 
+    /// Delete-account (R8): removes the cloud copy + identity but KEEPS the local
+    /// logbook (reverts to signed-out, local-only). No unsynced-loss warning needed —
+    /// `detachFromCloud` preserves every local row, including unsynced ones.
     private func deleteAccount() async {
         actionError = nil
         isDeleting = true
         defer { isDeleting = false }
-        do { try await auth.deleteAccount() }
+        // Capture the user id BEFORE deletion — the session is gone afterward, so
+        // detachFromCloud can't read it itself (#15).
+        let userID = LogbookSession.userID
+        do {
+            try await auth.deleteAccount()
+            if let userID { sync.detachFromCloud(userID: userID) }
+        }
         catch { actionError = "Couldn't delete your account. Please try again." }
     }
 }

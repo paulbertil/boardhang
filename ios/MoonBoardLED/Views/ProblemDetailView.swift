@@ -4,6 +4,7 @@ import SwiftData
 /// View a saved problem and light it up on the board.
 struct ProblemDetailView: View {
     @EnvironmentObject private var ble: MoonBoardBLEManager
+    @EnvironmentObject private var sync: LogbookSyncManager
     @Environment(\.modelContext) private var context
     @Environment(\.dismiss) private var dismiss
     @AppStorage(Board.mini2025.flippedKey) private var flipped = false
@@ -82,6 +83,7 @@ struct ProblemDetailView: View {
         .onDisappear { flushPending() }
         .sheet(isPresented: $showingLog) {
             LogAscentSheet(sourceCatalogID: nil,
+                           userProblemID: problem.id,
                            problemName: problem.name,
                            problemGrade: problem.grade,
                            tries: max(pendingTries, 1),
@@ -123,34 +125,36 @@ struct ProblemDetailView: View {
         guard pendingTries > 0 else { return }
         let tries = pendingTries
         pendingTries = 0
-        if let existing = todaysAttempt() {
-            existing.tries += tries
+        let day = Date()
+        // Deterministic id (per problem + UTC day) so the same-day attempt converges to
+        // one row across devices AND the local merge keys off the exact same bucket the
+        // server does — no local-calendar vs UTC drift (#12).
+        let attemptID = AscentSyncID.attemptID(problemIdentity: problem.id.uuidString, day: day)
+        if let existing = LogbookSession.attemptRow(id: attemptID, in: context) {
+            LogbookSession.revive(existing, tries: tries, date: day)
         } else {
-            context.insert(Ascent(sourceCatalogID: nil,
-                                  problemName: problem.name,
-                                  problemGrade: problem.grade,
-                                  votedGrade: problem.grade,
-                                  tries: tries,
-                                  sent: false,
-                                  boardLayoutId: board.id))
+            let attempt = Ascent(date: day,
+                                 sourceCatalogID: nil,
+                                 problemName: problem.name,
+                                 problemGrade: problem.grade,
+                                 votedGrade: problem.grade,
+                                 tries: tries,
+                                 sent: false,
+                                 boardLayoutId: board.id,
+                                 userProblemID: problem.id,
+                                 id: attemptID)
+            attempt.markDirty()
+            context.insert(attempt)
         }
+        sync.pushSoon()
     }
 
-    /// The un-sent attempt logged today for this user problem, if any.
-    private func todaysAttempt() -> Ascent? {
-        let name = problem.name
-        let descriptor = FetchDescriptor<Ascent>(
-            predicate: #Predicate { $0.sent == false && $0.problemName == name }
-        )
-        guard let matches = try? context.fetch(descriptor) else { return nil }
-        let cal = Calendar.current
-        return matches.first {
-            $0.sourceCatalogID == nil && cal.isDate($0.date, inSameDayAs: Date())
-        }
-    }
-
+    /// Soft-delete: tombstone so the delete propagates to the user's other devices
+    /// (R6), rather than a hard local delete.
     private func deleteProblem() {
-        context.delete(problem)
+        problem.tombstoned = true
+        problem.markDirty()
+        sync.pushSoon()
         dismiss()
     }
 }

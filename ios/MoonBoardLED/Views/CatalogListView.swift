@@ -105,6 +105,17 @@ struct CatalogListView: View {
     @State private var recentExpanded = false
     /// Lets a board tap (from Home) pop this catalog back to its list.
     @Environment(TabRouter.self) private var router
+    /// Collaborative-lists hub. Drives the optional group lens (U1): when a list is
+    /// active AND its board matches this catalog, the catalog gains per-member sub-chips,
+    /// per-person badges, and swipe-to-add. When no list is active the catalog is solo.
+    @EnvironmentObject private var lists: ListsManager
+    /// The me/us toggle. `true` = "Just me" (solo view) even while a list is active, so
+    /// the user can flip back to their own catalog without leaving the list context.
+    @State private var showMine = false
+    /// Selected per-member group chips (member × status bucket). Empty = no group
+    /// narrowing (GroupFilter.passes returns true), so an active lens with no chips is
+    /// the full catalog with badges.
+    @State private var groupSelection: Set<GroupChip> = []
 
     init(board: Board, angle: Int) {
         self.board = board
@@ -221,7 +232,7 @@ struct CatalogListView: View {
     /// catalog has loaded and the ascent/favorite-derived sets that a few filters
     /// key on (their counts change when you log an ascent or toggle a favorite).
     private var computeSignature: String {
-        "\(loadedCatalog != nil)|\(filterSignature)|\(sentIDs.count)|\(loggedIDs.count)|\(favoriteIDs.count)"
+        "\(loadedCatalog != nil)|\(filterSignature)|\(sentIDs.count)|\(loggedIDs.count)|\(favoriteIDs.count)|\(groupSignature)"
     }
 
     /// Catalog ids the user has actually sent (≥1 ascent with `sent == true`).
@@ -241,6 +252,41 @@ struct CatalogListView: View {
     /// Whether the grade range is anything other than the full span.
     private var gradeRangeActive: Bool {
         clampedLower > 0 || clampedUpper < gradeMaxIndex
+    }
+
+    // MARK: - Group lens (U1)
+
+    /// The active collaborative list IF its board matches this catalog's board — board
+    /// scoping (KTD5). Nil when no list is active or the boards differ, which forces the
+    /// solo view. This is the single gate the whole lens hangs off.
+    private var activeList: ListRow? {
+        guard let list = lists.activeList, list.board_layout_id == board.id else { return nil }
+        return list
+    }
+
+    /// Whether the group lens is currently applied: a board-matched list is active AND
+    /// the user hasn't toggled to "Just me".
+    private var lensActive: Bool { activeList != nil && !showMine }
+
+    /// Members of the active list (for chips + badges); empty when the lens is off.
+    private var groupMembers: [Profile] { lensActive ? lists.members : [] }
+
+    /// Per-member sent/tried status for the active list; empty when the lens is off, so
+    /// the filter and badges are pure no-ops in solo mode.
+    private var groupStatus: [UUID: MemberStatus] { lensActive ? lists.groupStatus : [:] }
+
+    /// The group selection actually applied (empty when the lens is off).
+    private var appliedGroupSelection: Set<GroupChip> { lensActive ? groupSelection : [] }
+
+    /// Recompute token for the group lens — folds selection + a status fingerprint so
+    /// toggling chips or refreshing group status re-runs the off-main filter.
+    private var groupSignature: String {
+        let sel = appliedGroupSelection
+            .map { "\($0.memberID.uuidString):\($0.bucket.rawValue)" }
+            .sorted()
+            .joined(separator: ",")
+        let statusFingerprint = groupStatus.values.reduce(0) { $0 + $1.sent.count + $1.tried.count }
+        return "\(lensActive)|\(sel)|\(statusFingerprint)"
     }
 
     /// Snapshot all filter inputs, then filter + sort off the main thread.
@@ -265,13 +311,17 @@ struct CatalogListView: View {
         // static cache); the instance's reads are pure and thread-safe.
         let membershipSnapshot = membership
         let keys = [sortPrimary] + (sortSecondary.map { [$0] } ?? [])
+        // Group-lens snapshots (empty in solo mode, so the filter is a no-op there).
+        let groupSel = appliedGroupSelection
+        let groupStat = groupStatus
 
         return await Task.detached(priority: .userInitiated) {
             Self.filter(problems: problems, grades: grades, lo: lo, hi: hi,
                         minStars: minStarsSnapshot, selectedMethods: selectedMethodSet,
                         subset: subset, membership: membershipSnapshot, activeSets: activeSets,
                         holdSet: holdSet, selected: selected, sent: sent, logged: logged,
-                        favs: favs, search: searchSnapshot, keys: keys)
+                        favs: favs, search: searchSnapshot, keys: keys,
+                        groupSelection: groupSel, groupStatus: groupStat)
         }.value
     }
 
@@ -284,7 +334,9 @@ struct CatalogListView: View {
                                membership: HoldSetMembership, activeSets: Set<Int>,
                                holdSet: Set<String>, selected: Set<CatalogFilter>,
                                sent: Set<String>, logged: Set<String>, favs: Set<String>,
-                               search: String, keys: [SortKey]) -> [CatalogProblem] {
+                               search: String, keys: [SortKey],
+                               groupSelection: Set<GroupChip>,
+                               groupStatus: [UUID: MemberStatus]) -> [CatalogProblem] {
         let gradeIndexByValue = Dictionary(grades.enumerated().map { ($0.element, $0.offset) },
                                            uniquingKeysWith: { a, _ in a })
         let matches = problems.filter { p in
@@ -296,6 +348,8 @@ struct CatalogListView: View {
             (!subset || membership.isClimbable(holds: p.holds, activeSetIDs: activeSets)) &&
             (holdSet.isEmpty || holdSet.isSubset(of: Set(p.holds.map { "\($0.c)-\($0.r)" }))) &&
             matchesFilters(p, selected: selected, sent: sent, logged: logged, favs: favs) &&
+            // Group lens: an empty selection returns true (no-op in solo mode).
+            GroupFilter.passes(catalogID: p.id, selection: groupSelection, status: groupStatus) &&
             (search.isEmpty
              || p.name.localizedCaseInsensitiveContains(search)
              || p.setter.localizedCaseInsensitiveContains(search))
@@ -372,6 +426,57 @@ struct CatalogListView: View {
         }
     }
 
+    /// The group lens control shown at the top of the catalog when a collaborative list
+    /// is active on this board (U1): a "Just me / [list]" toggle and, in group mode,
+    /// per-member chips under each status bucket. Absent entirely in solo mode.
+    @ViewBuilder
+    private var groupBarSection: some View {
+        if let activeList {
+            Section {
+                Picker("View", selection: $showMine) {
+                    Text("Just me").tag(true)
+                    Text(activeList.name.isEmpty ? "The list" : activeList.name).tag(false)
+                }
+                .pickerStyle(.segmented)
+
+                if lensActive {
+                    ForEach(StatusBucket.allCases) { bucket in
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text(bucket.label)
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(.secondary)
+                            ScrollView(.horizontal, showsIndicators: false) {
+                                HStack(spacing: 8) {
+                                    ForEach(groupMembers) { member in
+                                        groupChip(member: member, bucket: bucket)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            } header: {
+                Text("Group")
+            }
+        }
+    }
+
+    private func groupChip(member: Profile, bucket: StatusBucket) -> some View {
+        let gc = GroupChip(memberID: member.id, bucket: bucket)
+        let on = groupSelection.contains(gc)
+        return Button {
+            if on { groupSelection.remove(gc) } else { groupSelection.insert(gc) }
+        } label: {
+            Text("@\(member.handle)")
+                .font(.caption.weight(.medium))
+                .padding(.horizontal, 10)
+                .padding(.vertical, 5)
+                .background(on ? Color.accentColor : Color(.systemGray5), in: Capsule())
+                .foregroundStyle(on ? .white : .primary)
+        }
+        .buttonStyle(.plain)
+    }
+
     var body: some View {
             // Read the pre-computed list (filtered/sorted off the main thread) and
             // build the lookup sets ONCE per render — never per row (per-row
@@ -404,6 +509,7 @@ struct CatalogListView: View {
                     }
                 } else {
                     List {
+                        groupBarSection
                         // Problems recently viewed for this board+angle, pinned above
                         // the list so you can jump back in. Ignores filters. Shows
                         // the most recent by default; the rest expand on demand.

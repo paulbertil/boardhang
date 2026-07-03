@@ -21,6 +21,18 @@ final class ListsManager: ObservableObject {
     /// joined list. The UI clears it once consumed.
     @Published var pendingOpenListId: UUID?
 
+    /// The list whose group lens the main catalog is showing, if any. Set by "Browse
+    /// together"; session-scoped (not persisted), mirroring the active-board selection.
+    /// When nil, the catalog is in solo mode. The catalog additionally board-scopes this
+    /// (the lens only applies while the catalog is on the list's board).
+    @Published var activeListId: UUID?
+
+    /// The active list resolved from `myLists`, or nil.
+    var activeList: ListRow? {
+        guard let id = activeListId else { return nil }
+        return myLists.first { $0.id == id } ?? (currentList?.id == id ? currentList : nil)
+    }
+
     /// Loaded detail for the currently-open list.
     @Published private(set) var currentList: ListRow?
     @Published private(set) var members: [Profile] = []
@@ -205,6 +217,7 @@ final class ListsManager: ObservableObject {
         pile = []
         groupStatus = [:]
         pendingOpenListId = nil
+        activeListId = nil
     }
 
     // MARK: - Membership

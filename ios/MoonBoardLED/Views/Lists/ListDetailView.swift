@@ -90,7 +90,9 @@ struct ListDetailView: View {
             try await lists.loadDetail(listId)
             try await lists.refreshGroupStatus(listId: listId)
         } catch {
+            // Don't drop the user onto an active lens with empty/stale data.
             actionError = error.localizedDescription
+            return
         }
         if let list { activeBoardId = list.board_layout_id }
         lists.activeListId = listId

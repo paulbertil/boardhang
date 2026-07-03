@@ -92,11 +92,17 @@ final class ListsManager: ObservableObject {
 
     /// Soft-deletes a list (owner only; RLS enforces). Members see it disappear on their
     /// next refresh (loadMyLists filters `deleted`).
+    /// Deletes a list (owner only; RLS enforces). Hard delete rather than a soft
+    /// `deleted` flag: the FK cascade sweeps `list_members` and `list_problems`, which
+    /// also revokes every former member's read path (a soft-deleted list still satisfied
+    /// `is_list_member`, so members could keep reading each other's status via the RPC).
+    /// Lists are cloud-only, so there's no tombstone-pull requirement forcing them to
+    /// linger.
     func deleteList(_ listId: UUID) async throws {
         let client = try requireClient()
         try await client
             .from("lists")
-            .update(["deleted": true])
+            .delete()
             .eq("id", value: listId)
             .execute()
         try await loadMyLists()
@@ -127,6 +133,14 @@ final class ListsManager: ObservableObject {
             .execute()
             .value
 
+        try await reloadPile(listId)
+    }
+
+    /// Re-fetches just the live pile for a list into published state (cheaper than a full
+    /// `loadDetail`). Used after an add so pile-derived UI (badges, swipe-suppression)
+    /// reflects the change.
+    func reloadPile(_ listId: UUID) async throws {
+        let client = try requireClient()
         pile = try await client
             .from("list_problems")
             .select()
@@ -151,6 +165,8 @@ final class ListsManager: ObservableObject {
             added_by: userID
         )
         try await client.from("list_problems").insert(payload).execute()
+        // Refresh the pile so pileIDs (swipe-add suppression) and badges reflect the add.
+        if currentList?.id == listId { try await reloadPile(listId) }
     }
 
     /// Removes a problem from the pile (soft-delete, so re-adding stays clean).

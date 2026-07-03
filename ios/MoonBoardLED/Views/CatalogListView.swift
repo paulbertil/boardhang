@@ -261,6 +261,11 @@ struct CatalogListView: View {
     /// solo view. This is the single gate the whole lens hangs off.
     private var activeList: ListRow? {
         guard let list = lists.activeList, list.board_layout_id == board.id else { return nil }
+        // The lens reads members/status/pile from ListsManager's single detail slot.
+        // Only treat the lens as active when that slot actually belongs to this list, so
+        // a subsequently-opened different list's data can never render under this one
+        // (fails safe to solo mode rather than mis-attributing another list's status).
+        guard lists.currentList?.id == list.id else { return nil }
         return list
     }
 
@@ -285,7 +290,14 @@ struct CatalogListView: View {
             .map { "\($0.memberID.uuidString):\($0.bucket.rawValue)" }
             .sorted()
             .joined(separator: ",")
-        let statusFingerprint = groupStatus.values.reduce(0) { $0 + $1.sent.count + $1.tried.count }
+        // Fingerprint the actual ids, not just counts — a status refresh that swaps one
+        // sent/tried id for another keeps the count identical, and a count-only token
+        // would miss the change and leave a chip-filtered list stale.
+        let statusFingerprint = groupStatus
+            .map { "\($0.key.uuidString):\($0.value.sent.sorted().joined(separator: ",")):\($0.value.tried.sorted().joined(separator: ","))" }
+            .sorted()
+            .joined(separator: "|")
+            .hashValue
         return "\(lensActive)|\(sel)|\(statusFingerprint)"
     }
 
@@ -642,6 +654,8 @@ struct CatalogListView: View {
             // A board tap on Home pops us back to the list (see TabRouter).
             .onChange(of: router.listResetToken) { _, _ in selectedProblem = nil }
             .onChange(of: filterSignature) { _, _ in visibleLimit = Self.pageSize }
+            // Group-lens changes narrow the list too — reset pagination like any filter.
+            .onChange(of: groupSignature) { _, _ in visibleLimit = Self.pageSize }
             .task {
                 guard loadedCatalog == nil else { return }
                 let resource = board.catalogResource(angle: angle)

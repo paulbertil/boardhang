@@ -22,7 +22,7 @@ create or replace function public.join_list_by_token(p_token uuid)
     returns uuid
     language plpgsql
     security definer
-    set search_path = public
+    set search_path = ''
 as $$
 declare
     target_list uuid;
@@ -64,7 +64,7 @@ create or replace function public.list_member_status(p_list_id uuid)
     returns table (user_id uuid, source_catalog_id text, sent boolean)
     language plpgsql
     security definer
-    set search_path = public
+    set search_path = ''
     stable
 as $$
 begin

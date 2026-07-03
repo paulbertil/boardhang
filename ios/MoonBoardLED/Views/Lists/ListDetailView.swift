@@ -13,6 +13,7 @@ struct ListDetailView: View {
 
     @State private var catalogByID: [String: CatalogProblem] = [:]
     @State private var actionError: String?
+    @State private var showingBrowse = false
 
     private var list: ListRow? {
         lists.currentList?.id == listId ? lists.currentList : lists.myLists.first { $0.id == listId }
@@ -25,9 +26,13 @@ struct ListDetailView: View {
 
     var body: some View {
         List {
+            browseSection
             inviteSection
             membersSection
             pileSection
+        }
+        .sheet(isPresented: $showingBrowse, onDismiss: { Task { await refresh() } }) {
+            ListBrowseView(listId: listId, boardLayoutId: list?.board_layout_id ?? 7)
         }
         .navigationTitle(list.map { $0.name.isEmpty ? "List" : $0.name } ?? "List")
         .navigationBarTitleDisplayMode(.inline)
@@ -64,6 +69,16 @@ struct ListDetailView: View {
     }
 
     // MARK: - Sections
+
+    private var browseSection: some View {
+        Section {
+            Button {
+                showingBrowse = true
+            } label: {
+                Label("Browse & add problems", systemImage: "plus.magnifyingglass")
+            }
+        }
+    }
 
     @ViewBuilder
     private var inviteSection: some View {
@@ -118,13 +133,11 @@ struct ListDetailView: View {
     private func perPersonBadges(catalogID: String) -> some View {
         HStack(spacing: 6) {
             ForEach(lists.members) { member in
-                let status = lists.groupStatus[member.id]
-                let color: Color = {
-                    if status?.sent.contains(catalogID) == true { return .green }
-                    if status?.tried.contains(catalogID) == true { return .orange }
-                    return Color(.systemGray4)
-                }()
-                MemberInitial(handle: member.handle, color: color, compact: true)
+                MemberInitial(
+                    handle: member.handle,
+                    color: memberStatusColor(lists.groupStatus[member.id], catalogID: catalogID),
+                    compact: true
+                )
             }
         }
     }
@@ -158,25 +171,5 @@ struct ListDetailView: View {
     private func deleteList() async {
         do { try await lists.deleteList(listId); dismiss() }
         catch { actionError = error.localizedDescription }
-    }
-}
-
-/// A small circular avatar-substitute showing a handle's first letter. Reused for the
-/// member roster and the per-person status dots (colored variant).
-private struct MemberInitial: View {
-    let handle: String
-    var color: Color = .accentColor
-    var compact: Bool = false
-
-    private var letter: String {
-        String(handle.first ?? "?").uppercased()
-    }
-
-    var body: some View {
-        Text(letter)
-            .font(compact ? .caption2.weight(.bold) : .footnote.weight(.semibold))
-            .foregroundStyle(.white)
-            .frame(width: compact ? 20 : 28, height: compact ? 20 : 28)
-            .background(color, in: Circle())
     }
 }

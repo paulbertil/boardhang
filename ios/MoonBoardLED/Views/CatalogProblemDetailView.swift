@@ -68,8 +68,26 @@ struct CatalogProblemRow: View {
     /// Hold sets to show in the thumbnail (nil = all). The catalog passes the
     /// board's active sets; the logbook leaves it nil.
     var visibleHoldSetIDs: Set<Int>? = nil
+    /// Per-person group status badges (handle + color), shown under the row in the
+    /// collaborative-list lens (U2). nil in solo mode — the row renders exactly as before.
+    var groupBadges: [(handle: String, color: Color)]? = nil
 
     var body: some View {
+        if let groupBadges, !groupBadges.isEmpty {
+            VStack(alignment: .leading, spacing: 5) {
+                problemRow
+                HStack(spacing: 6) {
+                    ForEach(Array(groupBadges.enumerated()), id: \.offset) { _, badge in
+                        MemberInitial(handle: badge.handle, color: badge.color, compact: true)
+                    }
+                }
+            }
+        } else {
+            problemRow
+        }
+    }
+
+    private var problemRow: some View {
         ProblemRow(
             name: problem.name,
             isBenchmark: problem.isBenchmark,

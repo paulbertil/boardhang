@@ -289,6 +289,15 @@ struct CatalogListView: View {
         return "\(lensActive)|\(sel)|\(statusFingerprint)"
     }
 
+    /// Per-person badges for a catalog row in lens mode (U2); nil in solo mode so rows
+    /// render unchanged. One entry per member, colored by their status for this problem.
+    private func groupBadges(for catalogID: String) -> [(handle: String, color: Color)]? {
+        guard lensActive else { return nil }
+        return groupMembers.map {
+            (handle: $0.handle, color: memberStatusColor(groupStatus[$0.id], catalogID: catalogID))
+        }
+    }
+
     /// Snapshot all filter inputs, then filter + sort off the main thread.
     /// Everything here is a value type (or the pre-resolved `membership`
     /// instance), so it's safe to hand to a detached task — see the compute task.
@@ -563,7 +572,8 @@ struct CatalogListView: View {
                                                       isFavorite: favs.contains(problem.id),
                                                       showPreview: showClimbPreviews,
                                                       setup: board.setup,
-                                                      visibleHoldSetIDs: renderIDs)
+                                                      visibleHoldSetIDs: renderIDs,
+                                                      groupBadges: groupBadges(for: problem.id))
                                         .contentShape(Rectangle())
                                 }
                                 .buttonStyle(.plain)

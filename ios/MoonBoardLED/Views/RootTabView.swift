@@ -116,6 +116,19 @@ struct RootTabView: View {
             LogbookReconciliationView()
                 .interactiveDismissDisabled()
         }
+        // Share-link join. A second `.onOpenURL` alongside the auth one in MoonBoardApp:
+        // both fire for every deep link and each ignores URLs that aren't theirs
+        // (ListInviteLink.token returns nil for the auth-callback URL). On a valid join
+        // link, join then jump to the Lists tab and open the joined list.
+        .onOpenURL { url in
+            guard let token = ListInviteLink.token(from: url) else { return }
+            Task {
+                if let id = try? await lists.join(token: token) {
+                    router.selection = .lists
+                    lists.pendingOpenListId = id
+                }
+            }
+        }
     }
 }
 

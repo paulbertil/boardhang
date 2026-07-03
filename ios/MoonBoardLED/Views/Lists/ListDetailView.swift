@@ -25,6 +25,7 @@ struct ListDetailView: View {
 
     var body: some View {
         List {
+            inviteSection
             membersSection
             pileSection
         }
@@ -63,6 +64,19 @@ struct ListDetailView: View {
     }
 
     // MARK: - Sections
+
+    @ViewBuilder
+    private var inviteSection: some View {
+        if let list, let url = ListInviteLink.url(for: list.invite_token) {
+            Section {
+                ShareLink(item: url) {
+                    Label("Share invite link", systemImage: "square.and.arrow.up")
+                }
+            } footer: {
+                Text("Anyone with this link can join and share their send/try status with the group.")
+            }
+        }
+    }
 
     private var membersSection: some View {
         Section("Members") {

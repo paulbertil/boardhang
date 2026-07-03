@@ -17,6 +17,10 @@ final class ListsManager: ObservableObject {
     /// The lists the current user belongs to (owner or member), newest first.
     @Published private(set) var myLists: [ListRow] = []
 
+    /// Set after a successful share-link join so the Lists tab can push straight to the
+    /// joined list. The UI clears it once consumed.
+    @Published var pendingOpenListId: UUID?
+
     /// Loaded detail for the currently-open list.
     @Published private(set) var currentList: ListRow?
     @Published private(set) var members: [Profile] = []
@@ -147,6 +151,22 @@ final class ListsManager: ObservableObject {
             .execute()
     }
 
+    // MARK: - Join
+
+    /// Trades a share-link invite token for membership via the join RPC (which inserts
+    /// the caller as a member — a not-yet-member can't do that directly under RLS).
+    /// Idempotent server-side. Returns the joined list's id.
+    @discardableResult
+    func join(token: UUID) async throws -> UUID {
+        let client = try requireClient()
+        let listId: UUID = try await client
+            .rpc("join_list_by_token", params: ["p_token": token])
+            .execute()
+            .value
+        try await loadMyLists()
+        return listId
+    }
+
     // MARK: - Group status
 
     /// Fetches every member's send/try status for the list via the minimal-projection
@@ -184,6 +204,7 @@ final class ListsManager: ObservableObject {
         members = []
         pile = []
         groupStatus = [:]
+        pendingOpenListId = nil
     }
 
     // MARK: - Membership

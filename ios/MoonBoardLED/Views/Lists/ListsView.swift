@@ -26,6 +26,9 @@ struct ListsView: View {
                 }
             }
             .navigationTitle("Lists")
+            .navigationDestination(item: $lists.pendingOpenListId) { id in
+                ListDetailView(listId: id)
+            }
             .toolbar {
                 if available {
                     ToolbarItem(placement: .primaryAction) {

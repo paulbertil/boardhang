@@ -10,10 +10,12 @@ struct ListDetailView: View {
 
     @EnvironmentObject private var lists: ListsManager
     @Environment(\.dismiss) private var dismiss
+    @Environment(TabRouter.self) private var router
+    /// The Search tab's active board — "Browse together" points it at this list's board.
+    @AppStorage(ActiveBoard.storageKey) private var activeBoardId = ActiveBoard.default
 
     @State private var catalogByID: [String: CatalogProblem] = [:]
     @State private var actionError: String?
-    @State private var showingBrowse = false
 
     private var list: ListRow? {
         lists.currentList?.id == listId ? lists.currentList : lists.myLists.first { $0.id == listId }
@@ -30,9 +32,6 @@ struct ListDetailView: View {
             inviteSection
             membersSection
             pileSection
-        }
-        .sheet(isPresented: $showingBrowse, onDismiss: { Task { await refresh() } }) {
-            ListBrowseView(listId: listId, boardLayoutId: list?.board_layout_id ?? 7)
         }
         .navigationTitle(list.map { $0.name.isEmpty ? "List" : $0.name } ?? "List")
         .navigationBarTitleDisplayMode(.inline)
@@ -73,11 +72,29 @@ struct ListDetailView: View {
     private var browseSection: some View {
         Section {
             Button {
-                showingBrowse = true
+                Task { await browseTogether() }
             } label: {
-                Label("Browse & add problems", systemImage: "plus.magnifyingglass")
+                Label("Browse together", systemImage: "person.2.wave.2")
             }
+        } footer: {
+            Text("Opens the catalog on this list's board with the group lens on — see who's sent/tried each problem and swipe to add.")
         }
+    }
+
+    /// Activate the group lens for this list and jump to the catalog: refresh the
+    /// group's status, point the Search tab at the list's board, set the active list,
+    /// and switch tabs. The catalog board-scopes the lens, so it only lights up on the
+    /// matching board.
+    private func browseTogether() async {
+        do {
+            try await lists.loadDetail(listId)
+            try await lists.refreshGroupStatus(listId: listId)
+        } catch {
+            actionError = error.localizedDescription
+        }
+        if let list { activeBoardId = list.board_layout_id }
+        lists.activeListId = listId
+        router.selection = .search
     }
 
     @ViewBuilder

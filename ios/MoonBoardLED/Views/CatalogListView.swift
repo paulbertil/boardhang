@@ -469,7 +469,18 @@ struct CatalogListView: View {
                     }
                 }
             } header: {
-                Text("Group")
+                HStack {
+                    Text("Group")
+                    Spacer()
+                    Button("Leave") {
+                        lists.activeListId = nil
+                        groupSelection = []
+                        showMine = false
+                    }
+                    .font(.caption.weight(.semibold))
+                    .textCase(nil)
+                    .foregroundStyle(Color.accentColor)
+                }
             }
         }
     }

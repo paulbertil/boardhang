@@ -483,53 +483,64 @@ struct CatalogListView: View {
         }
     }
 
-    /// The group lens control shown at the top of the catalog when a collaborative list
-    /// is active on this board (U1): a "Just me / [list]" toggle and, in group mode,
-    /// per-member chips under each status bucket. Absent entirely in solo mode.
+    /// The lens bar shown at the top of the catalog when a collaborative list is active on
+    /// this board (U1). A multi-member list gets the "Just me / [list]" toggle plus per-member
+    /// chips; a solo list gets only a minimal exit — there's nobody to compare against, but the
+    /// browse session still needs a visible way out (a solo list otherwise has no persistent
+    /// Leave, which would strand the lens on and leak the pile UI into normal browsing).
     @ViewBuilder
     private var groupBarSection: some View {
-        // Only meaningful for a multi-member list — with just you there's nobody to compare
-        // against, so a solo list shows the plain catalog (no bar, no chips, no filtering)
-        // while still keeping swipe-to-add via `lensActive`.
-        if isGroupList, let activeList {
+        if let activeList {
             Section {
-                Picker("View", selection: $showMine) {
-                    Text("Just me").tag(true)
-                    Text(activeList.name.isEmpty ? "The list" : activeList.name).tag(false)
-                }
-                .pickerStyle(.segmented)
+                if isGroupList {
+                    Picker("View", selection: $showMine) {
+                        Text("Just me").tag(true)
+                        Text(activeList.name.isEmpty ? "The list" : activeList.name).tag(false)
+                    }
+                    .pickerStyle(.segmented)
 
-                if groupFilterActive {
-                    ForEach(StatusBucket.allCases) { bucket in
-                        VStack(alignment: .leading, spacing: 6) {
-                            Text(bucket.label)
-                                .font(.caption.weight(.semibold))
-                                .foregroundStyle(.secondary)
-                            ScrollView(.horizontal, showsIndicators: false) {
-                                HStack(spacing: 8) {
-                                    ForEach(groupMembers) { member in
-                                        groupChip(member: member, bucket: bucket)
+                    if groupFilterActive {
+                        ForEach(StatusBucket.allCases) { bucket in
+                            VStack(alignment: .leading, spacing: 6) {
+                                Text(bucket.label)
+                                    .font(.caption.weight(.semibold))
+                                    .foregroundStyle(.secondary)
+                                ScrollView(.horizontal, showsIndicators: false) {
+                                    HStack(spacing: 8) {
+                                        ForEach(groupMembers) { member in
+                                            groupChip(member: member, bucket: bucket)
+                                        }
                                     }
                                 }
                             }
                         }
                     }
+                } else {
+                    // Solo list: no filter UI, just a note that swipe/tap adds to this list.
+                    Text("Adding to \(activeList.name.isEmpty ? "this list" : activeList.name)")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
                 }
             } header: {
                 HStack {
-                    Text("Group")
+                    Text(isGroupList ? "Group" : "Browse & add")
                     Spacer()
-                    Button("Leave") {
-                        lists.activeListId = nil
-                        groupSelection = []
-                        showMine = false
-                    }
-                    .font(.caption.weight(.semibold))
-                    .textCase(nil)
-                    .foregroundStyle(Color.accentColor)
+                    Button("Leave") { exitLens() }
+                        .font(.caption.weight(.semibold))
+                        .textCase(nil)
+                        .foregroundStyle(Color.accentColor)
                 }
             }
         }
+    }
+
+    /// Leave the active-list browse lens. Clearing `activeListId` is the single trigger: it
+    /// makes `activeList` nil, and `onChange(of: activeList?.id)` resets `groupSelection`/
+    /// `showMine`. That cascade is the one source of truth for the post-clear reset — the
+    /// tab-away auto-clear in `RootTabView` relies on it too, since it can't reach this view's
+    /// `@State` directly.
+    private func exitLens() {
+        lists.activeListId = nil
     }
 
     private func groupChip(member: Profile, bucket: StatusBucket) -> some View {

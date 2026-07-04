@@ -112,6 +112,12 @@ struct RootTabView: View {
                 Task { await sync.syncNow() }
             }
         }
+        // Leaving the catalog ends the active-list browse lens so it can't leak the pile UI
+        // (glyph/swipe/detail button) into normal browsing. Entry sets `activeListId` and
+        // then routes to `.search`, so this only fires when moving *away* from the catalog.
+        .onChange(of: router.selection) { _, newTab in
+            if newTab != .search { lists.activeListId = nil }
+        }
         .sheet(isPresented: $sync.pendingReconciliation) {
             LogbookReconciliationView()
                 .interactiveDismissDisabled()

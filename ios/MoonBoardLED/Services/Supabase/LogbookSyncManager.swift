@@ -192,7 +192,6 @@ final class LogbookSyncManager: ObservableObject {
 
         // user_problems first (ascents may link to them).
         let pCursor = cursorString(table: "user_problems", userID: userID)
-        var pNewest = SyncDate.date(pCursor) ?? .distantPast
         let problemRows: [UserProblemSyncRow] = try await client
             .from("user_problems").select()
             .gt("updated_at", value: pCursor)
@@ -200,11 +199,9 @@ final class LogbookSyncManager: ObservableObject {
             .execute().value
         for row in problemRows {
             applyProblem(row)
-            if let ts = SyncDate.date(row.updated_at), ts > pNewest { pNewest = ts }
         }
 
         let aCursor = cursorString(table: "ascents", userID: userID)
-        var aNewest = SyncDate.date(aCursor) ?? .distantPast
         let ascentRows: [AscentSyncRow] = try await client
             .from("ascents").select()
             .gt("updated_at", value: aCursor)
@@ -212,12 +209,20 @@ final class LogbookSyncManager: ObservableObject {
             .execute().value
         for row in ascentRows {
             applyAscent(row)
-            if let ts = SyncDate.date(row.updated_at), ts > aNewest { aNewest = ts }
         }
 
         try context.save()
-        setCursor(SyncDate.string(pNewest), table: "user_problems", userID: userID)
-        setCursor(SyncDate.string(aNewest), table: "ascents", userID: userID)
+        // Advance each cursor to the newest row's EXACT server timestamp. Rows are ordered
+        // by updated_at asc, so the last row is the high-water mark; store its raw string
+        // (full microsecond precision) rather than round-tripping through SyncDate, which
+        // truncates to milliseconds and would keep re-matching the boundary row on every
+        // pull. Only advance when rows came back — an empty pull leaves the cursor as-is.
+        if let newest = problemRows.last?.updated_at {
+            setCursor(newest, table: "user_problems", userID: userID)
+        }
+        if let newest = ascentRows.last?.updated_at {
+            setCursor(newest, table: "ascents", userID: userID)
+        }
     }
 
     /// LWW apply: incoming wins iff its `updated_at` is newer than the local row's.

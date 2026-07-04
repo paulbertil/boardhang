@@ -1,48 +1,59 @@
 # Catalog Data Pipeline
 
-How official MoonBoard problems get from the boardsesh API into the app as bundled, read-only
-catalogs — and how to regenerate or add a board. Pairs with [`../CONTEXT.md`](../CONTEXT.md)
-§"Importing official problems".
+How official MoonBoard problems get from the boardsesh API into **Supabase**, and from there
+synced down and cached by each client (iOS, PWA, future Android) — and how to regenerate or add
+a board. Pairs with [`../CONTEXT.md`](../CONTEXT.md) §"Importing official problems".
 
-**Key files:** `scripts/*.py` (generation), `MoonBoardLED/Catalog/Catalog.swift` (loading),
-`MoonBoardLED/Models/Problem.swift`, `MoonBoardLED/Board/HoldSetMembership.swift`.
+The catalog is **server-distributed**, not bundled: clients no longer ship the problem JSON.
+They download it lazily per board into a local cache and query it locally, so every client stays
+in sync instead of drifting on divergent bundles. See migration `supabase/migrations/0003_catalog_problems.sql`.
+
+**Key files:** `scripts/fetch_boardsesh*.py` (fetch) + `scripts/import_catalog.py` (upload to
+Supabase), `MoonBoardLED/Catalog/Catalog.swift` (synced disk cache + loading),
+`MoonBoardLED/Services/Supabase/CatalogSyncManager.swift` (iOS pull),
+`web/src/catalog/catalogSync.ts` (PWA pull), `MoonBoardLED/Board/HoldSetMembership.swift`.
 
 ## Data flow
 
 ```
 boardsesh GraphQL API  (https://ws.boardsesh.com/graphql, public, no auth)
     │
-    ├─ scripts/fetch_boardsesh_mini2025.py ─► MoonBoardLED/Resources/MiniMoonBoard2025Catalog.json
-    │                                          (Mini 2025, single angle, written straight to the bundle)
-    │
-    └─ scripts/fetch_boardsesh.py ──────────► catalog-data/<slug>_<angle>.json
-                                               (staging area for the other boards)
+    ├─ scripts/fetch_boardsesh_mini2025.py ─┐
+    └─ scripts/fetch_boardsesh.py ──────────┴─► catalog-data/<slug>_<angle>.json   (staging)
                                                      │
-                        (copy / promote into the bundle as needed)
+                          scripts/import_catalog.py  │  (service-role key; upsert on source_catalog_id)
                                                      ▼
-                                    MoonBoardLED/Resources/<Board>Catalog[_<angle>].json
-    scripts/derive_holdset_membership.py ──► MoonBoardLED/Resources/<Board>HoldSets.json
-        (samples hold-set overlay PNGs in Assets.xcassets/Boards/<folder>/)
-    scripts/import_board_images.py ────────► MoonBoardLED/Assets.xcassets/Boards/<folder>/*.png
+                                    Supabase  public.catalog_problems   (source of truth)
                                                      │
-                                                     ▼
-        Catalog.swift (loads bundled JSON, JSONSerialization fast path)
-        HoldSetMembership.swift (membership lookup by "col-row")
-                                                     ▼
+                       download-and-cache, lazy per (layout_id, angle) slab, updated_at > cursor
+                          ┌──────────────────────────┼───────────────────────────┐
+                          ▼                                                        ▼
+   iOS: CatalogSyncManager → Application Support/CatalogCache/*.json     PWA: catalogSync.ts → IndexedDB
+        Catalog.swift (JSONSerialization fast path over the cached slab)
+                          ▼
         CatalogListView / CatalogProblemDetailView  (Search tab)  →  lights on device via BLE
+
+    scripts/derive_holdset_membership.py ──► MoonBoardLED/Resources/<Board>HoldSets.json  (still bundled)
+    scripts/import_board_images.py ────────► MoonBoardLED/Assets.xcassets/Boards/<folder>/*.png
+        HoldSetMembership.swift (membership lookup by "col-row")
 ```
 
 Two directories, two roles:
-- **`catalog-data/`** — staging output of `fetch_boardsesh.py` for all boards/angles. Not
-  necessarily what ships.
-- **`MoonBoardLED/Resources/`** — the JSON actually **bundled** into the app and loaded at runtime.
+- **`catalog-data/`** — staging output of the fetch scripts for all boards/angles. The input to
+  `import_catalog.py`.
+- **`MoonBoardLED/Resources/`** — **no longer holds catalogs** (they're server-distributed now).
+  Still holds the `*HoldSets.json` files and other bundled assets.
 
 ## File naming conventions
 
-- **Single-angle** (Mini 2025 only, 40°): `MiniMoonBoard2025Catalog.json` — no angle suffix.
-- **Multi-angle**: `<Name>Catalog_<angle>.json`, e.g. `MoonBoardMasters2019Catalog_40.json`.
-  `_25` and `_40` are the wall angle in degrees.
-- **Hold sets**: `<Name>HoldSets.json`, e.g. `MiniMoonBoard2025HoldSets.json`.
+The catalog resource base name (from `Board.catalogResource(angle:)`) is still the identity of a
+board+angle "slab" — it's now the **cache filename** (`Application Support/CatalogCache/<name>.json`
+on iOS) rather than a bundled resource:
+
+- **Single-angle** (Mini 2025 only, 40°): `MiniMoonBoard2025Catalog` — no angle suffix.
+- **Multi-angle**: `<Name>Catalog_<angle>`, e.g. `MoonBoardMasters2019Catalog_40`. `_25` and `_40`
+  are the wall angle in degrees.
+- **Hold sets** (still bundled): `<Name>HoldSets.json`, e.g. `MiniMoonBoard2025HoldSets.json`.
 
 ## JSON schemas
 
@@ -58,7 +69,7 @@ Two directories, two roles:
   "count": 4889,
   "problems": [
     {
-      "id": "fdac08b2-…",   // stable UUID (same across angles)
+      "id": "fdac08b2-…",   // UUIDv5, globally unique per (board, angle) — the catalog_problems PK
       "name": "…",
       "grade": "6A+",        // Font grade
       "userGrade": null,     // ignored by the app
@@ -93,23 +104,24 @@ why "beta" mode in the app has nothing finer to show for catalog problems).
 ## Regenerating / adding a board
 
 ```bash
-# 1. Fetch problems
-python3 scripts/fetch_boardsesh_mini2025.py                 # Mini 2025 → straight to Resources/
-python3 scripts/fetch_boardsesh.py --layout 5 --angle 40    # other boards → catalog-data/
+# 1. Fetch problems into the catalog-data/ staging area
+python3 scripts/fetch_boardsesh.py --layout 5 --angle 40    # boards/angles → catalog-data/
 #   useful flags: --all  --min-ascents N  --benchmarks-only  --delay 0.25  --out-dir <path>
 
-# 2. Derive hold-set membership (needs Pillow: pip install Pillow)
-python3 scripts/derive_holdset_membership.py                # scans its BOARDS list → *HoldSets.json
+# 2. Upload the staged JSON to Supabase (idempotent upsert on source_catalog_id).
+#    Needs the SERVICE-ROLE key (bypasses RLS) — never ship it in a client.
+SUPABASE_URL=https://<ref>.supabase.co SUPABASE_SERVICE_ROLE_KEY=<service-role-key> \
+  python3 scripts/import_catalog.py --all                   # or --layout 5 --angle 40
 
-# 3. (New board only) import board art
+# 3. Derive hold-set membership (needs Pillow: pip install Pillow)
+python3 scripts/derive_holdset_membership.py                # scans its BOARDS list → *HoldSets.json (bundled)
+
+# 4. (New board only) import board art
 python3 scripts/import_board_images.py [--src /path/to/boardsesh]
 
-# 4. Register the board in Swift: add to Board.all in MoonBoardLED/Board/Board.swift
-#    (and a MoonBoardSetup in MoonBoardSetup.swift if geometry differs)
-
-# 5. Rebuild
-xcodebuild -project MoonBoardLED.xcodeproj -scheme MoonBoardLED \
-  -destination 'generic/platform=iOS Simulator' -configuration Debug build CODE_SIGNING_ALLOWED=NO
+# 5. Register the board in Swift: add to Board.all in MoonBoardLED/Board/Board.swift
+#    (and a MoonBoardSetup in MoonBoardSetup.swift if geometry differs). Clients then sync the
+#    board's slab from Supabase the first time it's added/opened — no rebuild needed to ship data.
 ```
 
 `derive_holdset_membership.py` samples each hold-set overlay PNG's alpha channel (threshold ~60) to
@@ -117,9 +129,14 @@ decide which grid positions a set owns; that's why it needs the imported board a
 
 ## Gotchas
 
-- **Bundled JSON is minified** (one line). `Catalog.swift` decodes with `JSONSerialization`, not
-  `Codable`, because Codable is far slower over thousands of problems in debug builds. Keep the
-  fast path if you touch loading.
+- **`Catalog.swift` decodes with `JSONSerialization`, not `Codable`**, because Codable is far
+  slower over thousands of problems in debug builds. The synced disk-cache slabs are written in the
+  same on-disk shape the bundled files used, so this fast path is unchanged — keep it if you touch
+  loading. `CatalogSyncManager` writes slabs to `Application Support/CatalogCache/` and merges
+  deltas by `source_catalog_id`.
+- **First open of a board needs network.** The catalog is no longer bundled, so a board's first
+  add/open fetches its slab from Supabase (cached after that, incl. offline). A cold offline
+  first-run — or a clone with `Supabase.xcconfig` unset — shows an empty catalog until one sync.
 - **Benchmark detection is unreliable on boardsesh.** When both `--benchmarks-only` and
   `--min-ascents N` are passed, `fetch_boardsesh.py` **unions** the two result sets (deduped by
   uuid) because the benchmark flag misses popular problems. (See the recent commit history around
@@ -127,5 +144,5 @@ decide which grid positions a set owns; that's why it needs the imported board a
 - API returns may hit `429/502/503`; the fetch scripts have retry/`--delay` handling.
 - Hold-id ↔ (col,row) conversion inside the scripts: `holdId = (row-1)*11 + col + 1`; reverse is
   `col = (holdId-1) % 11`, `row = (holdId-1)//11 + 1`.
-- `catalog-data/` is staging; `MoonBoardLED/Resources/` is what ships. Don't confuse the two when
-  wiring a new board.
+- `catalog-data/` is staging (the input to `import_catalog.py`); **Supabase** is the catalog source
+  of truth clients sync from. `MoonBoardLED/Resources/` no longer holds catalogs — only `*HoldSets.json`.

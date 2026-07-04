@@ -34,14 +34,21 @@ final class CatalogSyncManager {
     /// the on-disk slab, advance the cursor. No-op when unconfigured; on an offline/transient
     /// failure it leaves the cursor and cached slab untouched so the next trigger retries.
     func syncSlab(layoutId: Int, angle: Int) async {
-        guard let client else { return }
         let board = Board.with(layoutId: layoutId)
         let resource = board.catalogResource(angle: angle)
-        guard !inFlight.contains(resource) else { return }
+        guard let client else {
+            print("[CatalogSync] \(resource): skipped — Supabase not configured")
+            return
+        }
+        guard !inFlight.contains(resource) else {
+            print("[CatalogSync] \(resource): skipped — already syncing")
+            return
+        }
         inFlight.insert(resource)
         defer { inFlight.remove(resource) }
 
         let cursor = cursorString(resource)
+        print("[CatalogSync] \(resource): pulling rows updated after \(cursor)")
         do {
             let rows: [CatalogProblemSyncRow] = try await client
                 .from("catalog_problems").select()
@@ -50,7 +57,11 @@ final class CatalogSyncManager {
                 .gt("updated_at", value: cursor)
                 .order("updated_at", ascending: true)
                 .execute().value
-            guard !rows.isEmpty else { return }
+            guard !rows.isEmpty else {
+                print("[CatalogSync] \(resource): already up to date (0 new rows)")
+                return
+            }
+            print("[CatalogSync] \(resource): received \(rows.count) new/changed row(s)")
 
             // Merge by id into the existing slab dicts (upsert live rows, drop tombstones).
             var byID: [String: [String: Any]] = [:]
@@ -72,8 +83,10 @@ final class CatalogSyncManager {
             Catalog.writeSlab(problems: Array(problems), setup: board.name, resource: resource)
             setCursor(SyncDate.string(newest), resource)
             CatalogIndex.invalidate()   // newly-synced ids now resolve in the logbook / lists
+            print("[CatalogSync] \(resource): cached \(problems.count) problems; cursor now \(SyncDate.string(newest))")
         } catch {
             // Offline or transient: leave the cursor + slab as-is; a later trigger retries.
+            print("[CatalogSync] \(resource): sync failed (offline/transient) — \(error)")
         }
     }
 

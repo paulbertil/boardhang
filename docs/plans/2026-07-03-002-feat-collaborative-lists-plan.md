@@ -584,6 +584,44 @@ a list is solo (no other members yet) or shared. Mostly
   chip for a member absent from the new roster, silently narrowing to zero results — track
   separately.)*
 
+### Pile round-trip + phantom-chip fixes (post-U8) — 2026-07-04
+
+A second refinement pass making the pile visible and editable from every problem surface, and
+fixing the stale-chip bug the previous pass flagged as out of scope. Touches
+`CatalogListView.swift`, `CatalogProblemDetailView.swift` (the pager + `CatalogProblemRow`),
+and `ListDetailView.swift`. No `ListsManager`/DTO/migration change — reuses the existing
+`addProblem`/`removeProblem`/`reloadPile` and `pile`/`activeList`/`currentList` surface.
+
+- **Fix the multi→multi phantom-chip bug.** `CatalogListView`: reset `groupSelection = []`
+  and `showMine = false` when `activeList?.id` changes (a fresh list starts clean in group
+  view, mirroring what "Leave" already does), **and** defensively filter
+  `appliedGroupSelection` to the current roster (`chip.memberID ∈ lists.members`). Net: a
+  member leaving mid-session silently drops their chip and the filter *relaxes* rather than
+  snapping to zero results; switching lists no longer carries the previous roster's chips.
+- **"In pile" indicator + swipe-toggle on catalog rows.** Add an `inPile` flag to
+  `CatalogProblemRow` → a passive glyph (`tray.and.arrow.down.fill`) after the name, shown in
+  lens context (`lensActive`) when `pileIDs` contains the problem. The row's trailing
+  `swipeActions` becomes a **toggle**: green **Add** (`plus`) when not in pile, red **Remove**
+  (`trash`, `removeProblem` + `reloadPile`) when in pile. Row-tap still opens the detail.
+- **Add/remove from the problem-detail screen.** `CatalogProblemPager` gains
+  `@EnvironmentObject lists` and a `pileListId: UUID?` parameter. A **row-1 circle button next
+  to the heart** toggles add ⇄ remove (`tray.and.arrow.down` ⇄ filled + tinted), visible only
+  when `pileListId != nil` **and** the pager's `board` matches. "In pile" is read from
+  `lists.pile`; add/remove target `pileListId` then `reloadPile`. The logbook entry point
+  passes `pileListId: nil` → no button. The catalog lens passes `activeList?.id`.
+- **Tappable pile rows in `ListDetailView`.** Tapping a *resolved* pile row (one present in
+  the already-loaded `catalogByID`) opens `CatalogProblemPager` seeded with the whole resolved
+  pile (current = tapped), `board` = the list's board, `source = .catalog(angle:
+  defaultAngle)`, `pileListId = listId`. Unresolved raw-id rows stay non-tappable. **No global
+  `activeListId` mutation** — the explicit `pileListId` carries the pile context, so tapping a
+  pile row is a pure view action with no catalog-lens side effect.
+
+  *Shared piece:* `pileListId` unifies the detail's add/remove across both entry points
+  (catalog-from-list and pile-tap). Both paths already load that list into
+  `currentList`/`pile`, so the "in pile" state and the remove target stay consistent; the
+  board-match guard keeps a stale `currentList` slot from mis-attributing a pile control on an
+  unrelated board.
+
 ---
 
 ## Scope Boundaries

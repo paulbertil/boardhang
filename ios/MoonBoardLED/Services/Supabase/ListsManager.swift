@@ -192,6 +192,24 @@ final class ListsManager: ObservableObject {
         if currentList?.id == listId { try await reloadPile(listId) }
     }
 
+    /// Which of the caller's lists currently contain a given catalog problem, mapped to the
+    /// live `list_problems` row id (so the caller can toggle it off). RLS scopes
+    /// `list_problems` to lists the caller is a member of, so a plain filtered select
+    /// returns exactly their lists' rows. Used by the "add to list" toggle.
+    func listsContaining(sourceCatalogID: String) async throws -> [UUID: UUID] {
+        let client = try requireClient()
+        let rows: [ListProblemRow] = try await client
+            .from("list_problems")
+            .select()
+            .eq("source_catalog_id", value: sourceCatalogID)
+            .eq("deleted", value: false)
+            .execute()
+            .value
+        var out: [UUID: UUID] = [:]
+        for row in rows { out[row.list_id] = row.id }
+        return out
+    }
+
     /// Removes a problem from the pile (soft-delete, so re-adding stays clean).
     func removeProblem(_ listProblemId: UUID) async throws {
         let client = try requireClient()

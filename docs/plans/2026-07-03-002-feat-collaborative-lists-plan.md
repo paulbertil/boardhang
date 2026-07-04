@@ -537,6 +537,28 @@ combine rule (R7) is applied client-side over these sets.
   `Not completed → both` narrows to un-sent-by-either; per-person badges match the RPC data;
   tapping adds to the shared pile visible on the other device after refresh.
 
+### UX refinements (post-U6/U7) — 2026-07-04
+
+Design/UX pass on `ListDetailView` once the surface was live, making it read cleanly whether
+a list is solo (no other members yet) or shared. All in
+`ios/MoonBoardLED/Views/Lists/ListDetailView.swift`; no `ListsManager`/DTO/migration change.
+
+- **Member-agnostic "Browse & add".** The old "Browse together" button (two-person icon +
+  "group lens" footer) read wrong on a personal list. Renamed to **"Browse & add problems"**
+  with a neutral icon and a footer that describes the action, not the group. The
+  `browseTogether()` navigation is unchanged.
+- **Member-agnostic invite copy.** The "Share invite link" footer dropped "with the group"
+  so it doesn't imply an existing group on a solo list.
+- **Invite section moved below Members** (order: Browse → Members → Share invite link →
+  Problems), so the roster reads first and inviting sits under it.
+- **Swipe-to-delete pile rows.** Trailing `swipeActions` Delete on each pile row (mirroring
+  the catalog swipe-to-add), calling `removeProblem` then `reloadPile`. All-members-equal —
+  no owner gate.
+- **Solo owner gets Delete-only.** When the owner is the only member
+  (`members.count <= 1`), the toolbar hides "Leave list" and shows only "Delete list"
+  (leaving a member-less list you own is nonsensical). Owner-with-others and non-owner
+  menus are unchanged.
+
 ---
 
 ## Scope Boundaries
@@ -565,6 +587,8 @@ combine rule (R7) is applied client-side over these sets.
   many members (collapse to "+N"?). Render naively first; revisit if lists get large.
 - **Permission granularity (R9 assumption):** all-members-equal is assumed; if abuse
   (someone clearing the pile) shows up, add owner-only destructive actions. Not built now.
+  *Partially resolved (2026-07-04, UX refinements):* pile removal is all-members-equal
+  (swipe-to-delete any row); a solo owner is offered Delete-only rather than Leave.
 - **Invite-link revocation:** rotating `invite_token` to revoke an old link is a cheap
   follow-up; v1 ships a single stable token per list.
 - **QR rendering:** whether to ship QR in v1 or just the share sheet — decide during U7.

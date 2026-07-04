@@ -20,23 +20,26 @@ holds). LED geometry is row-parameterized (12-row Mini / 18-row full boards) and
 path can drive a full wall too — the Mini is a hardware limit, not a code one; only the
 custom-problem editor is Mini-specific.
 
-Beyond authoring it bundles read-only **official-problem catalogs** for five layouts (Mini
-2025, 2016, 2024, Masters 2017/2019 — ~22k problems across 40°/25°) with search/sort/filter/
+Beyond authoring it browses read-only **official-problem catalogs** for five layouts (Mini
+2025, 2016, 2024, Masters 2017/2019 — ~12k problems across 40°/25°) with search/sort/filter/
 favorites, a **multi-board** model (per-board angle + installed hold-set filtering), a local
 **logbook** of ascents/attempts with a grade-pyramid view, and **optional accounts** (email
-code or Google, `@handle`). Everything except sign-in works fully offline.
+code or Google, `@handle`). The catalog is **server-distributed** (synced from Supabase into a
+local per-board cache — see [docs/catalog-data-pipeline.md](docs/catalog-data-pipeline.md)); a
+board's first open needs network, then works offline. BLE authoring + the local logbook work
+fully offline; sign-in and the first catalog sync need network.
 
 ## Repo map (a monorepo)
 
 | Dir | What |
 | --- | --- |
 | `ios/` | **Primary app** — native SwiftUI + CoreBluetooth + SwiftData. Multi-board catalog, logbook, accounts. The live Xcode project is **`ios/MoonBoardLED.xcodeproj`**. |
-| `web/` | Companion **Web Bluetooth PWA** (Vite + React 19 + TS). Partial port: connect → build → light/clear. No catalog/logbook. |
+| `web/` | Companion **Web Bluetooth PWA** (Vite + React 19 + TS). Partial port: connect → build → light/clear. Catalog sync module (`src/catalog/catalogSync.ts`) added; no logbook yet. |
 | `shared/spec/` | **Markdown specs only** (BLE, geometry, data model). Not shared code — `web/` reimplements them in TS. |
-| `supabase/` | Postgres migration(s) backing accounts/profiles. |
+| `supabase/` | Postgres migrations backing accounts/profiles, the logbook, and the **catalog** (`0006_catalog_problems.sql`). |
 | `docs/` | Subsystem deep dives + index ([docs/README.md](docs/README.md)). |
-| `scripts/` | Python catalog fetchers + board-art importers. |
-| `catalog-data/` | Pre-fetched board catalogs (NOT bundled; copy into iOS `Resources/` to add a board). |
+| `scripts/` | Python catalog fetchers + `import_catalog.py` (upload to Supabase) + board-art importers. |
+| `catalog-data/` | Staged board catalogs — the input to `scripts/import_catalog.py`, which upserts them into Supabase. |
 
 ## Build & run
 
@@ -96,7 +99,8 @@ needs a secure context — desktop Chrome/Edge, Android Chrome, or iPhone via Bl
   requires it before any TestFlight/App Store release).
 - **Social features** — friends, shared lists, cloud logbook sync are planned, not built
   (logbook is local SwiftData only). Avatar upload deferred (`avatar_url` reserved).
-- Dev/prod Supabase env split; PWA catalog/logbook + HTTPS hosting; app icon (placeholder).
+- Dev/prod Supabase env split; PWA catalog **UI** (the sync module exists; wiring it into a
+  browse view is pending) + logbook + HTTPS hosting; app icon (placeholder).
 - Hold→LED mapping not yet hardware-confirmed — LED Test is the tool to confirm/flip it.
 
 ## External references

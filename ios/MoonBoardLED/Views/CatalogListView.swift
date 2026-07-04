@@ -395,9 +395,9 @@ struct CatalogListView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else if catalog.problems.isEmpty {
                     ContentUnavailableView {
-                        Label("No catalog bundled", systemImage: "tray")
+                        Label("No problems synced", systemImage: "tray")
                     } description: {
-                        Text("This board's problem catalog hasn't been bundled yet.")
+                        Text("This board's catalog hasn't synced yet. Check your connection, then reopen the board to sync it.")
                     }
                 } else {
                     List {
@@ -470,6 +470,19 @@ struct CatalogListView: View {
                         }
                     }
                     .scrollDismissesKeyboard(.interactively)
+                    .refreshable {
+                        // Pull-to-refresh: re-pull this slab's deltas from Supabase, then
+                        // reload the cached catalog and recompute the visible list. The
+                        // system shows/holds its own spinner for the duration of this
+                        // async closure. computeSignature keys on `loadedCatalog != nil`,
+                        // so a value→value swap won't auto-recompute — do it explicitly.
+                        await CatalogSyncManager.shared.syncSlab(layoutId: board.id, angle: angle)
+                        let resource = board.catalogResource(angle: angle)
+                        loadedCatalog = await Task.detached(priority: .userInitiated) {
+                            Catalog.load(resource: resource)
+                        }.value
+                        displayed = await computeDisplayed()
+                    }
                 }
             }
             // Native search: on iOS 26 a search-role tab grows the bottom pill bar
@@ -492,6 +505,10 @@ struct CatalogListView: View {
             .task {
                 guard loadedCatalog == nil else { return }
                 let resource = board.catalogResource(angle: angle)
+                // Ensure this slab is synced before loading. First open fetches it from
+                // the server; later opens read the cache. No-op offline/unconfigured —
+                // then `load` returns an empty catalog (the empty-state UI handles it).
+                await CatalogSyncManager.shared.syncSlab(layoutId: board.id, angle: angle)
                 loadedCatalog = await Task.detached(priority: .userInitiated) {
                     Catalog.load(resource: resource)
                 }.value

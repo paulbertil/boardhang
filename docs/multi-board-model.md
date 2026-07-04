@@ -14,7 +14,7 @@ There are three nested concepts — keep them distinct:
 1. **`MoonBoardSetup`** (in `MoonBoardSetup.swift`) — the _physical_ board: `id` (the layout id,
    1–7), name, art folder, background asset, `MoonBoardGeometry`, and its list of `MoonBoardHoldSet`s.
 2. **`Board`** (in `Board.swift`) — a _supported/registered_ board = a `MoonBoardSetup` plus the
-   angles it ships catalogs for, catalog resource prefix, and hold-set membership resource name.
+   angles it has catalogs for, catalog resource prefix, and hold-set membership resource name.
    `Board.all` is the registry the app exposes. The **`id` is the layout id** — `Board` is a
    wrapper, the integer layout id is the true key used in storage and ascents.
 3. **added / active** — runtime user state layered on top (below).
@@ -68,8 +68,11 @@ Each board namespaces its settings by layout id:
   `MoonBoardMasters2019Catalog_40`. The angle suffix is only applied when `board.hasAngleChoice`.
 - Default angle is the first entry in the board's `angles` array.
 
-See [catalog-data-pipeline.md](catalog-data-pipeline.md) for the resource file naming and how the
-data is generated.
+The catalog is **server-distributed**, not bundled: a resource name now identifies a board+angle
+"slab" that `CatalogSyncManager` syncs from Supabase into a local disk cache
+(`Application Support/CatalogCache/<resource>.json`), which `Catalog.load` reads. A slab syncs
+lazily — when its board is added/activated or its catalog list opens. See
+[catalog-data-pipeline.md](catalog-data-pipeline.md) for the pipeline and file naming.
 
 ## Hold-set membership & filtering
 
@@ -105,8 +108,11 @@ Catalog problems are shared identifiers that may exist on multiple boards, so an
 1. If `sourceCatalogID` is set, look it up in `CatalogIndex` → the authoritative board's id.
 2. Otherwise fall back to the stored `boardLayoutId` (used for user-created problems).
 
-`CatalogIndex` is built once at startup, mapping every catalog problem id → `{board, problem}`
-across all bundled catalogs/angles (first occurrence wins). Stored `boardLayoutId` **defaults to 7**
+`CatalogIndex` maps every catalog problem id → `{board, problem}` across all synced catalog slabs
+(first occurrence wins). It's built lazily from the on-disk cache and rebuilt when
+`CatalogSyncManager` invalidates it after a pull, so a problem resolves once its slab has synced;
+an un-synced id returns nil and the ascent still renders from its denormalized name/grade snapshot.
+Stored `boardLayoutId` **defaults to 7**
 (Mini 2025), which backfills pre-multi-board ascents. The logbook filters by
 `effectiveBoardLayoutId`, not the raw stored value — see [data-model-and-logging.md](data-model-and-logging.md).
 

@@ -16,6 +16,12 @@ struct ListDetailView: View {
 
     @State private var catalogByID: [String: CatalogProblem] = [:]
     @State private var actionError: String?
+    /// The pile problem whose detail (pager) is open, if any.
+    @State private var selectedProblem: CatalogProblem?
+    /// The pile snapshot the open pager swipes across — frozen at tap time so removing the
+    /// on-screen problem (via the pager's pile button) doesn't shrink the live pile out from
+    /// under the pager and make it jump to a different problem.
+    @State private var pagerPile: [CatalogProblem] = []
     /// True once *this* view's `loadDetail` has resolved. `lists.members` is a single shared
     /// array on the manager that still holds the previously-viewed list's roster until then,
     /// so member-count-derived UI must not trust it before this flips.
@@ -46,6 +52,14 @@ struct ListDetailView: View {
         }
         .navigationTitle(list.map { $0.name.isEmpty ? "List" : $0.name } ?? "List")
         .navigationBarTitleDisplayMode(.inline)
+        .navigationDestination(item: $selectedProblem) { problem in
+            // Swipe across the whole (resolved) pile; the pile context lets the detail
+            // add/remove to this list without touching the global catalog lens.
+            CatalogProblemPager(problems: pagerPile.isEmpty ? resolvedPile : pagerPile,
+                                current: problem,
+                                board: board, source: .catalog(angle: board.defaultAngle),
+                                pileListId: listId)
+        }
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Menu {
@@ -155,15 +169,22 @@ struct ListDetailView: View {
                     Group {
                         if let problem = catalogByID[item.source_catalog_id] {
                             // Same row component as the catalog's problem list, with the same
-                            // per-person group badges.
-                            CatalogProblemRow(
-                                problem: problem,
-                                isSent: myStatus?.sent.contains(item.source_catalog_id) ?? false,
-                                setup: board.setup,
-                                groupBadges: pileBadges(for: item.source_catalog_id)
-                            )
+                            // per-person group badges. Tap opens the problem detail (pager).
+                            Button {
+                                pagerPile = resolvedPile   // freeze the swipe set at tap time
+                                selectedProblem = problem
+                            } label: {
+                                CatalogProblemRow(
+                                    problem: problem,
+                                    isSent: myStatus?.sent.contains(item.source_catalog_id) ?? false,
+                                    setup: board.setup,
+                                    groupBadges: pileBadges(for: item.source_catalog_id)
+                                )
+                                .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
                         } else {
-                            // Catalog not resolved yet — fall back to the raw id.
+                            // Catalog not resolved yet — fall back to the raw id (not tappable).
                             Text(item.source_catalog_id).foregroundStyle(.secondary)
                         }
                     }
@@ -182,6 +203,12 @@ struct ListDetailView: View {
 
     /// The list's board (for row rendering); defaults to Mini 2025 if unresolved.
     private var board: Board { Board.with(layoutId: list?.board_layout_id ?? 7) }
+
+    /// The pile resolved to catalog problems (preserving pile order), so the detail pager can
+    /// swipe across it. Unresolved raw-id rows are skipped — they're non-tappable anyway.
+    private var resolvedPile: [CatalogProblem] {
+        lists.pile.compactMap { catalogByID[$0.source_catalog_id] }
+    }
 
     /// The current user's own folded status, to light the row's "sent" indicator like the
     /// catalog does for your own sends.

@@ -138,26 +138,36 @@ struct ListDetailView: View {
                     .foregroundStyle(.secondary)
             } else {
                 ForEach(lists.pile) { item in
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text(catalogByID[item.source_catalog_id]?.name ?? item.source_catalog_id)
-                        perPersonBadges(catalogID: item.source_catalog_id)
+                    if let problem = catalogByID[item.source_catalog_id] {
+                        // Same row component as the catalog's problem list, with the same
+                        // per-person group badges.
+                        CatalogProblemRow(
+                            problem: problem,
+                            isSent: myStatus?.sent.contains(item.source_catalog_id) ?? false,
+                            setup: board.setup,
+                            groupBadges: pileBadges(for: item.source_catalog_id)
+                        )
+                    } else {
+                        // Catalog not resolved yet — fall back to the raw id.
+                        Text(item.source_catalog_id).foregroundStyle(.secondary)
                     }
                 }
             }
         }
     }
 
-    /// One small dot per member, colored by their status for this problem:
-    /// green = sent, orange = tried (not sent), gray = untouched.
-    private func perPersonBadges(catalogID: String) -> some View {
-        HStack(spacing: 6) {
-            ForEach(lists.members) { member in
-                MemberInitial(
-                    handle: member.handle,
-                    color: memberStatusColor(lists.groupStatus[member.id], catalogID: catalogID),
-                    compact: true
-                )
-            }
+    /// The list's board (for row rendering); defaults to Mini 2025 if unresolved.
+    private var board: Board { Board.with(layoutId: list?.board_layout_id ?? 7) }
+
+    /// The current user's own folded status, to light the row's "sent" indicator like the
+    /// catalog does for your own sends.
+    private var myStatus: MemberStatus? { lists.myUserID.flatMap { lists.groupStatus[$0] } }
+
+    /// Per-person status badges for a pile row (handle + color) — green = sent,
+    /// orange = tried, gray = untouched — matching the catalog's group-lens rows.
+    private func pileBadges(for catalogID: String) -> [(handle: String, color: Color)] {
+        lists.members.map {
+            (handle: $0.handle, color: memberStatusColor(lists.groupStatus[$0.id], catalogID: catalogID))
         }
     }
 

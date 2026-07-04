@@ -31,8 +31,21 @@ struct ListDetailView: View {
 
     var body: some View {
         List {
-            Section("Board") {
-                Text(board.name).foregroundStyle(.secondary)
+            Section {
+                NavigationLink {
+                    CatalogListView(board: board, angle: board.defaultAngle, addToListId: listId)
+                } label: {
+                    Label {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Browse problems")
+                            Text(board.name)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    } icon: {
+                        Image(systemName: "magnifyingglass")
+                    }
+                }
             }
             Section("Problems") {
                 if items.isEmpty {
@@ -49,7 +62,8 @@ struct ListDetailView: View {
         .navigationBarTitleDisplayMode(.inline)
         .navigationDestination(item: $selected) { problem in
             CatalogProblemPager(problems: resolvedPile, current: problem,
-                                board: board, source: .catalog(angle: board.defaultAngle))
+                                board: board, source: .catalog(angle: board.defaultAngle),
+                                addToListId: listId)
         }
         .toolbar {
             ToolbarItem(placement: .primaryAction) {

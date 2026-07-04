@@ -637,10 +637,11 @@ on that board. Fix the lifecycle so the lens is scoped to a deliberate browse se
   `activeList` → nil → the existing `onChange(of: activeList?.id)` in `CatalogListView` resets
   `groupSelection`/`showMine`. One hook, full reset. (`ProblemListView` is dead code; the live
   catalog is only the Search tab.)
-- **Always-dismissible (solo exit).** `groupBarSection` renders whenever `activeList != nil`
-  (not only `isGroupList`): a multi-member list keeps the "Just me / [list]" picker + per-member
-  chips; a **solo list shows only a minimal exit** (list name + a "Leave" button) — no filter
-  UI, but never a dead end, so a solo browse can be ended in-place without a tab switch.
+- **Solo list shows no bar.** `groupBarSection` renders only for a multi-member list
+  (`isGroupList`) — the "Just me / [list]" picker + per-member chips + "Leave". A solo list
+  shows no bar at all (nobody to compare against, and the top "Browse & add / Leave" strip read
+  as clutter); its browse session is ended by the tab-away auto-clear alone, not an in-catalog
+  control. (The multi-member bar keeps its "Leave" as the in-place exit.)
 - **Detail parity holds automatically.** The detail pile button already keys off
   `pileListId = lensActive ? activeList?.id : nil` (catalog path), so once `activeListId` is
   cleared the normal catalog and its detail show no pile control. The pile-tap pager (#4) is

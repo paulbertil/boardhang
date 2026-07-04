@@ -483,47 +483,39 @@ struct CatalogListView: View {
         }
     }
 
-    /// The lens bar shown at the top of the catalog when a collaborative list is active on
-    /// this board (U1). A multi-member list gets the "Just me / [list]" toggle plus per-member
-    /// chips; a solo list gets only a minimal exit — there's nobody to compare against, but the
-    /// browse session still needs a visible way out (a solo list otherwise has no persistent
-    /// Leave, which would strand the lens on and leak the pile UI into normal browsing).
+    /// The group lens bar shown at the top of the catalog for a *multi-member* list active on
+    /// this board (U1): the "Just me / [list]" toggle plus per-member chips. A solo list shows
+    /// no bar at all — there's nobody to compare against, and the browse session is ended by
+    /// the tab-away auto-clear in `RootTabView` rather than an in-catalog control.
     @ViewBuilder
     private var groupBarSection: some View {
-        if let activeList {
+        if isGroupList, let activeList {
             Section {
-                if isGroupList {
-                    Picker("View", selection: $showMine) {
-                        Text("Just me").tag(true)
-                        Text(activeList.name.isEmpty ? "The list" : activeList.name).tag(false)
-                    }
-                    .pickerStyle(.segmented)
+                Picker("View", selection: $showMine) {
+                    Text("Just me").tag(true)
+                    Text(activeList.name.isEmpty ? "The list" : activeList.name).tag(false)
+                }
+                .pickerStyle(.segmented)
 
-                    if groupFilterActive {
-                        ForEach(StatusBucket.allCases) { bucket in
-                            VStack(alignment: .leading, spacing: 6) {
-                                Text(bucket.label)
-                                    .font(.caption.weight(.semibold))
-                                    .foregroundStyle(.secondary)
-                                ScrollView(.horizontal, showsIndicators: false) {
-                                    HStack(spacing: 8) {
-                                        ForEach(groupMembers) { member in
-                                            groupChip(member: member, bucket: bucket)
-                                        }
+                if groupFilterActive {
+                    ForEach(StatusBucket.allCases) { bucket in
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text(bucket.label)
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(.secondary)
+                            ScrollView(.horizontal, showsIndicators: false) {
+                                HStack(spacing: 8) {
+                                    ForEach(groupMembers) { member in
+                                        groupChip(member: member, bucket: bucket)
                                     }
                                 }
                             }
                         }
                     }
-                } else {
-                    // Solo list: no filter UI, just a note that swipe/tap adds to this list.
-                    Text("Adding to \(activeList.name.isEmpty ? "this list" : activeList.name)")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
                 }
             } header: {
                 HStack {
-                    Text(isGroupList ? "Group" : "Browse & add")
+                    Text("Group")
                     Spacer()
                     Button("Leave") { exitLens() }
                         .font(.caption.weight(.semibold))

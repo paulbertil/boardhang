@@ -1,0 +1,144 @@
+// The catalog list for one board+angle slab: a "Recently viewed" section, the
+// problems (lazy-paginated), and the distinct empty/loading/offline states.
+// Consumes the useSlab data hook; sorting/filtering is layered on by U9 via the
+// optional `transform` prop (defaults to grade-ordinal sort).
+
+import { useEffect, useMemo, useRef, useState } from 'react'
+import type { CatalogBoardDef } from '../board/boards'
+import { gradeIndex } from '../board/grades'
+import { useSlab } from './useSlab'
+import { CatalogRow } from './CatalogRow'
+import { RecentlyViewed } from './RecentlyViewed'
+import { clearRecents, getRecentIds } from './recentsStore'
+import type { CatalogProblem } from './catalogSync'
+import { Button } from '@/components/ui/button'
+import { Skeleton } from '@/components/ui/skeleton'
+
+const PAGE = 30
+
+/** Default ordering: easiest first by canonical grade, then name. */
+function byGradeThenName(a: CatalogProblem, b: CatalogProblem): number {
+  const ga = gradeIndex(a.grade)
+  const gb = gradeIndex(b.grade)
+  return ga === gb ? a.name.localeCompare(b.name) : ga - gb
+}
+
+interface CatalogListProps {
+  board: CatalogBoardDef
+  angle: number
+  favoriteIds?: Set<string>
+  showThumbnails?: boolean
+  /** Filter/sort the slab's problems (U9). Defaults to grade-ordinal sort. */
+  transform?: (problems: CatalogProblem[]) => CatalogProblem[]
+  onSelect?: (problem: CatalogProblem) => void
+}
+
+export function CatalogList({
+  board,
+  angle,
+  favoriteIds = new Set(),
+  showThumbnails = false,
+  transform,
+  onSelect,
+}: CatalogListProps) {
+  const { problems, loading, degraded } = useSlab(board.layoutId, angle)
+  const [visibleCount, setVisibleCount] = useState(PAGE)
+  const sentinelRef = useRef<HTMLDivElement>(null)
+
+  const displayed = useMemo(
+    () => (transform ? transform(problems) : [...problems].sort(byGradeThenName)),
+    [problems, transform],
+  )
+
+  // Reset pagination when the slab or the result set changes.
+  useEffect(() => setVisibleCount(PAGE), [board.layoutId, angle, transform])
+
+  // Grow on scroll when the sentinel comes into view (button is the fallback).
+  useEffect(() => {
+    const el = sentinelRef.current
+    if (!el || typeof IntersectionObserver === 'undefined') return
+    const io = new IntersectionObserver((entries) => {
+      if (entries.some((e) => e.isIntersecting)) setVisibleCount((c) => c + PAGE)
+    })
+    io.observe(el)
+    return () => io.disconnect()
+  }, [displayed.length])
+
+  const recentProblems = useMemo(() => {
+    const byId = new Map(problems.map((p) => [p.source_catalog_id, p]))
+    return getRecentIds(board.layoutId, angle)
+      .map((id) => byId.get(id))
+      .filter((p): p is CatalogProblem => p !== undefined)
+  }, [problems, board.layoutId, angle])
+
+  const onSelectProblem = onSelect ?? (() => {})
+
+  if (loading && problems.length === 0) {
+    return (
+      <div className="space-y-2 p-3" data-testid="catalog-loading">
+        {Array.from({ length: 6 }, (_, i) => (
+          <Skeleton key={i} className="h-14 w-full" />
+        ))}
+      </div>
+    )
+  }
+
+  if (displayed.length === 0) {
+    const message =
+      problems.length > 0
+        ? 'No problems match the current filters.'
+        : degraded
+          ? "You're offline and this board isn't cached yet."
+          : 'No problems to show yet — sync this board to load its catalog.'
+    return (
+      <div className="p-8 text-center text-muted-foreground" data-testid="catalog-empty">
+        {message}
+        {problems.length > 0 && (
+          <div className="mt-2 text-xs">Clear filters to see all problems.</div>
+        )}
+      </div>
+    )
+  }
+
+  const visible = displayed.slice(0, visibleCount)
+
+  return (
+    <div>
+      {degraded && (
+        <div
+          className="bg-muted px-3 py-1.5 text-center text-xs text-muted-foreground"
+          data-testid="catalog-offline"
+        >
+          Offline — showing cached problems
+        </div>
+      )}
+      <RecentlyViewed
+        problems={recentProblems}
+        board={board}
+        favoriteIds={favoriteIds}
+        onSelect={onSelectProblem}
+        onClear={() => clearRecents(board.layoutId, angle)}
+      />
+      <div className="px-3 py-1 text-xs text-muted-foreground">
+        {displayed.length} problems
+      </div>
+      {visible.map((p) => (
+        <CatalogRow
+          key={p.source_catalog_id}
+          problem={p}
+          board={board}
+          isFavorite={favoriteIds.has(p.source_catalog_id)}
+          showThumbnail={showThumbnails}
+          onSelect={onSelectProblem}
+        />
+      ))}
+      {visible.length < displayed.length && (
+        <div ref={sentinelRef} className="p-3 text-center">
+          <Button variant="ghost" size="sm" onClick={() => setVisibleCount((c) => c + PAGE)}>
+            Show more
+          </Button>
+        </div>
+      )}
+    </div>
+  )
+}

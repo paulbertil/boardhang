@@ -7,8 +7,9 @@ import { FONT_GRADES, gradeIndex } from '../board/grades'
 import { getActiveHoldSetsRaw, getAngle, useBoardStore } from '../board/boardStore'
 import { holdSetContext, isClimbable } from '../board/holdSetMembership'
 import { CatalogList } from './CatalogList'
-import { FilterControls } from './FilterControls'
+import { FilterSheet } from './FilterSheet'
 import { ProblemDetail } from './ProblemDetail'
+import { Input } from '@/components/ui/input'
 import { applyFilters, type FilterContext } from './filters'
 import { useFavorites } from './favoritesStore'
 import { useFilters } from './useFilters'
@@ -69,7 +70,13 @@ export function CatalogScreen() {
 
   return (
     <div>
-      <FilterControls state={filters} onChange={setFilters} gradeSpan={gradeSpan} methods={methods} />
+      <div className="px-3 pb-1">
+        <Input
+          placeholder="Name or setter"
+          value={filters.search}
+          onChange={(e) => setFilters({ ...filters, search: e.target.value })}
+        />
+      </div>
       <CatalogList
         board={board}
         angle={angle}
@@ -80,6 +87,7 @@ export function CatalogScreen() {
         transform={transform}
         onSelect={openProblem}
       />
+      <FilterSheet state={filters} onChange={setFilters} gradeSpan={gradeSpan} methods={methods} />
     </div>
   )
 }

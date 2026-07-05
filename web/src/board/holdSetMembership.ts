@@ -22,6 +22,8 @@ const EMPTY: MembershipData = { sets: [], membership: {} }
 // Bundle every board's membership map into the app (small, and guarantees the
 // filter/render works offline). Keyed by resource base name (e.g.
 // "MiniMoonBoard2025HoldSets"), matching CatalogBoardDef.membershipResource.
+// The JSON files under ./membership/ are GENERATED — do not hand-edit; regenerate
+// with `python3 scripts/derive_holdset_membership.py` (writes both iOS and web).
 const files = import.meta.glob<MembershipData>('./membership/*.json', {
   eager: true,
   import: 'default',
@@ -59,15 +61,20 @@ export function isClimbable(
   })
 }
 
+/** Set ids that own at least one grid position. */
+function owningSetIds(data: MembershipData): Set<number> {
+  return new Set(Object.values(data.membership))
+}
+
 /** Set ids that own >=1 grid hold — these participate in filtering and the editor. */
 export function filterableSetIds(data: MembershipData): number[] {
-  const owning = new Set(Object.values(data.membership))
+  const owning = owningSetIds(data)
   return data.sets.map((s) => s.id).filter((id) => owning.has(id))
 }
 
 /** Set ids that own no grid holds (e.g. Screw-on Feet) — always-on render art. */
 export function alwaysOnSetIds(data: MembershipData): number[] {
-  const owning = new Set(Object.values(data.membership))
+  const owning = owningSetIds(data)
   return data.sets.map((s) => s.id).filter((id) => !owning.has(id))
 }
 
@@ -88,15 +95,15 @@ export function activeSetIds(csv: string, data: MembershipData): Set<number> {
   return stored.size === 0 ? filterable : stored
 }
 
-/** Canonical storage string. All filterable sets active -> "" (filter off). */
-export function activeCsv(ids: Set<number>, data: MembershipData): string {
-  if (ids.size >= filterableSetIds(data).length) return ''
-  return [...ids].sort((a, b) => a - b).join('|')
-}
-
 /** Whether every filterable set is active (board is full). */
 export function isAllActive(ids: Set<number>, data: MembershipData): boolean {
   return ids.size >= filterableSetIds(data).length
+}
+
+/** Canonical storage string. All filterable sets active -> "" (filter off). */
+export function activeCsv(ids: Set<number>, data: MembershipData): string {
+  if (isAllActive(ids, data)) return ''
+  return [...ids].sort((a, b) => a - b).join('|')
 }
 
 /** Hold-set ids to RENDER: active filterable sets plus always-on feet, so feet

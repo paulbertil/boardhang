@@ -20,7 +20,9 @@ Some sets own NO grid holds (e.g. Screw-on Feet — foot accessories placed betw
 the numbered positions). Those are display-only art layers; the app renders them
 but excludes them from the hold-set filter (a 0-count set here signals that).
 
-Output (per board): MoonBoardLED/Resources/<name>HoldSets.json
+Output (per board), written to BOTH the iOS bundle and the web PWA copy:
+    ios/MoonBoardLED/Resources/<name>HoldSets.json
+    web/src/board/membership/<name>HoldSets.json
     { "sets": [ {"id":28,"name":"Hold Set F"}, ... ],
       "membership": { "col-row": setId, ... } }   # col 0-10, row 1=bottom
 
@@ -36,9 +38,12 @@ try:
 except ImportError:
     sys.exit("Pillow required: python3 -m pip install --break-system-packages Pillow")
 
-ASSETS = os.path.join(os.path.dirname(__file__), "..", "MoonBoardLED",
+ASSETS = os.path.join(os.path.dirname(__file__), "..", "ios", "MoonBoardLED",
                       "Assets.xcassets", "Boards")
-RES = os.path.join(os.path.dirname(__file__), "..", "MoonBoardLED", "Resources")
+# Emit to both the iOS bundle and the web PWA's bundled copy so a re-run keeps
+# them in sync (the web port loads these via import.meta.glob).
+RES = os.path.join(os.path.dirname(__file__), "..", "ios", "MoonBoardLED", "Resources")
+WEB = os.path.join(os.path.dirname(__file__), "..", "web", "src", "board", "membership")
 
 # Grid geometry per board family (must match MoonBoardGeometry in the app).
 MINI = dict(cols=11, rowTop=12, rows=12, L=0.1047, R=0.0508, T=0.0793, B=0.0571)
@@ -132,9 +137,12 @@ def main():
             "sets": [{"id": i, "name": nm} for i, nm, _ in sets],
             "membership": dict(sorted(membership.items())),
         }
-        path = os.path.abspath(os.path.join(RES, f"{out_name}.json"))
-        with open(path, "w") as f:
-            json.dump(out, f, ensure_ascii=False, indent=0)
+        for dest in (RES, WEB):
+            if not os.path.isdir(dest):
+                continue
+            path = os.path.abspath(os.path.join(dest, f"{out_name}.json"))
+            with open(path, "w") as f:
+                json.dump(out, f, ensure_ascii=False, indent=0)
         total = g["cols"] * g["rowTop"]
         print(f"{folder}: {counts}")
         print(f"  classified {len(membership)}/{total}, conflicts {len(conflicts)} -> {out_name}.json")

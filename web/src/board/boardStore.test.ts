@@ -1,17 +1,19 @@
+import { act, renderHook } from '@testing-library/react'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { boardByLayoutId } from './boards'
 import {
   activateBoard,
   addBoard,
   getActiveBoardId,
-  getActiveHoldSetsCsv,
+  getActiveHoldSetsRaw,
   getAddedBoardIds,
   getAngle,
   getFlipped,
   removeBoard,
-  setActiveHoldSetsCsv,
+  setActiveHoldSetsRaw,
   setAngle,
   setFlipped,
+  useBoardStore,
 } from './boardStore'
 
 const mini = boardByLayoutId(7)! // angles [40]
@@ -19,14 +21,18 @@ const masters = boardByLayoutId(5)! // angles [40, 25]
 
 beforeEach(() => {
   localStorage.clear()
+  // Force the module-level snapshot to recompute from the cleared store, via the
+  // same 'storage' listener that keeps tabs in sync — avoids cross-test bleed.
+  window.dispatchEvent(new StorageEvent('storage'))
 })
 
 describe('added boards', () => {
-  it('starts empty and records added boards without duplicates', () => {
+  it('starts empty and records added boards, re-fronting on re-add', () => {
     expect(getAddedBoardIds()).toEqual([])
     addBoard(7)
     addBoard(5)
-    addBoard(7) // duplicate ignored
+    expect(getAddedBoardIds()).toEqual([5, 7]) // most-recent first
+    addBoard(7) // re-adding re-fronts (no duplicate)
     expect(getAddedBoardIds()).toEqual([7, 5])
   })
 
@@ -40,7 +46,7 @@ describe('added boards', () => {
     addBoard(5)
     addBoard(3)
     activateBoard(5)
-    expect(getAddedBoardIds()).toEqual([5, 7, 3])
+    expect(getAddedBoardIds()).toEqual([5, 3, 7])
     expect(getActiveBoardId()).toBe(5)
   })
 
@@ -49,6 +55,23 @@ describe('added boards', () => {
     addBoard(5)
     removeBoard(7)
     expect(getAddedBoardIds()).toEqual([5])
+  })
+
+  it('removing the active board reassigns active to the new MRU front', () => {
+    addBoard(5)
+    addBoard(7)
+    activateBoard(7) // list [7, 5], active 7
+    removeBoard(7)
+    expect(getAddedBoardIds()).toEqual([5])
+    expect(getActiveBoardId()).toBe(5)
+  })
+
+  it('removing the last active board falls back to the default', () => {
+    addBoard(3)
+    activateBoard(3)
+    removeBoard(3)
+    expect(getAddedBoardIds()).toEqual([])
+    expect(getActiveBoardId()).toBe(7) // DEFAULT_ACTIVE
   })
 })
 
@@ -75,8 +98,22 @@ describe('per-board settings persist and survive reload', () => {
   })
 
   it('installed hold sets: defaults empty, persists the raw string', () => {
-    expect(getActiveHoldSetsCsv(5)).toBe('')
-    setActiveHoldSetsCsv(5, '17|18')
-    expect(getActiveHoldSetsCsv(5)).toBe('17|18')
+    expect(getActiveHoldSetsRaw(5)).toBe('')
+    setActiveHoldSetsRaw(5, '17|18')
+    expect(getActiveHoldSetsRaw(5)).toBe('17|18')
+  })
+})
+
+describe('useBoardStore hook', () => {
+  it('re-renders when actions mutate the store', () => {
+    const { result } = renderHook(() => useBoardStore())
+    expect(result.current.addedBoards).toEqual([])
+
+    act(() => result.current.addBoard(5))
+    expect(result.current.addedBoards.map((b) => b.layoutId)).toEqual([5])
+
+    act(() => result.current.activateBoard(7))
+    expect(result.current.activeBoard.layoutId).toBe(7)
+    expect(result.current.addedBoards.map((b) => b.layoutId)).toEqual([7, 5])
   })
 })

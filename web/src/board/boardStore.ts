@@ -19,11 +19,30 @@ const activeHoldSetsKey = (id: number) => `activeHoldSets_${id}`
 /** Default active board when none is stored — the Mini 2025 this app centers on. */
 const DEFAULT_ACTIVE = 7
 
+// localStorage can throw (Safari private mode, quota, restricted embedders like
+// Bluefy). Persistence is best-effort: a failed read/write degrades to a default
+// rather than crashing a UI event handler.
+function readLS(key: string): string | null {
+  try {
+    return localStorage.getItem(key)
+  } catch {
+    return null
+  }
+}
+
+function writeLS(key: string, value: string): void {
+  try {
+    localStorage.setItem(key, value)
+  } catch {
+    // Ignore — the value simply won't persist across reloads.
+  }
+}
+
 // ─── Raw persisted accessors (pure; safe to unit-test directly) ───────────────
 
 /** Added board layout ids, in most-recently-used order (front = most recent). */
 export function getAddedBoardIds(): number[] {
-  const raw = localStorage.getItem(ADDED_KEY)
+  const raw = readLS(ADDED_KEY)
   if (!raw) return []
   return raw
     .split('|')
@@ -32,26 +51,32 @@ export function getAddedBoardIds(): number[] {
 }
 
 function writeAddedBoardIds(ids: number[]): void {
-  localStorage.setItem(ADDED_KEY, ids.join('|'))
+  writeLS(ADDED_KEY, ids.join('|'))
 }
 
-/** Add a board to the owned list (no-op if already added). Appended, not fronted. */
+/** Add a board to the owned list, promoting it to the MRU front (re-adding an
+ *  existing board re-fronts it), matching iOS `AddedBoards.promoting`. */
 export function addBoard(layoutId: number): void {
   if (boardByLayoutId(layoutId) === undefined) return
-  const ids = getAddedBoardIds()
-  if (!ids.includes(layoutId)) writeAddedBoardIds([...ids, layoutId])
+  const rest = getAddedBoardIds().filter((id) => id !== layoutId)
+  writeAddedBoardIds([layoutId, ...rest])
   emit()
 }
 
-/** Remove a board from the owned list. */
+/** Remove a board from the owned list. If it was active, reassign the active
+ *  board to the new MRU front (or the default when none remain). */
 export function removeBoard(layoutId: number): void {
-  writeAddedBoardIds(getAddedBoardIds().filter((id) => id !== layoutId))
+  const remaining = getAddedBoardIds().filter((id) => id !== layoutId)
+  writeAddedBoardIds(remaining)
+  if (getActiveBoardId() === layoutId) {
+    writeLS(ACTIVE_KEY, String(remaining[0] ?? DEFAULT_ACTIVE))
+  }
   emit()
 }
 
 /** The active board id (defaults to Mini 2025). */
 export function getActiveBoardId(): number {
-  const raw = localStorage.getItem(ACTIVE_KEY)
+  const raw = readLS(ACTIVE_KEY)
   const id = raw === null ? DEFAULT_ACTIVE : Number(raw)
   return boardByLayoutId(id) !== undefined ? id : DEFAULT_ACTIVE
 }
@@ -59,7 +84,7 @@ export function getActiveBoardId(): number {
 /** Make a board active and promote it to the front of the MRU list. */
 export function activateBoard(layoutId: number): void {
   if (boardByLayoutId(layoutId) === undefined) return
-  localStorage.setItem(ACTIVE_KEY, String(layoutId))
+  writeLS(ACTIVE_KEY, String(layoutId))
   const rest = getAddedBoardIds().filter((id) => id !== layoutId)
   writeAddedBoardIds([layoutId, ...rest])
   emit()
@@ -67,33 +92,34 @@ export function activateBoard(layoutId: number): void {
 
 /** The board's chosen angle, or its default when unset or invalid for the board. */
 export function getAngle(board: CatalogBoardDef): number {
-  const raw = localStorage.getItem(angleKey(board.layoutId))
+  const raw = readLS(angleKey(board.layoutId))
   const angle = raw === null ? NaN : Number(raw)
   return board.angles.includes(angle) ? angle : defaultAngle(board)
 }
 
 export function setAngle(layoutId: number, angle: number): void {
-  localStorage.setItem(angleKey(layoutId), String(angle))
+  writeLS(angleKey(layoutId), String(angle))
   emit()
 }
 
 /** Whether the board's LED strip is reverse-wired (feeds MoonBoardClient.send). */
 export function getFlipped(layoutId: number): boolean {
-  return localStorage.getItem(flippedKey(layoutId)) === 'true'
+  return readLS(flippedKey(layoutId)) === 'true'
 }
 
 export function setFlipped(layoutId: number, flipped: boolean): void {
-  localStorage.setItem(flippedKey(layoutId), String(flipped))
+  writeLS(flippedKey(layoutId), String(flipped))
   emit()
 }
 
-/** The raw installed-hold-set string ("" = all installed / filter off). */
-export function getActiveHoldSetsCsv(layoutId: number): string {
-  return localStorage.getItem(activeHoldSetsKey(layoutId)) ?? ''
+/** The raw installed-hold-set string ("" = all installed / filter off). It is
+ *  pipe-delimited (e.g. "17|18") and interpreted by holdSetMembership.ts. */
+export function getActiveHoldSetsRaw(layoutId: number): string {
+  return readLS(activeHoldSetsKey(layoutId)) ?? ''
 }
 
-export function setActiveHoldSetsCsv(layoutId: number, csv: string): void {
-  localStorage.setItem(activeHoldSetsKey(layoutId), csv)
+export function setActiveHoldSetsRaw(layoutId: number, raw: string): void {
+  writeLS(activeHoldSetsKey(layoutId), raw)
   emit()
 }
 
@@ -121,6 +147,12 @@ function emit(): void {
   for (const l of listeners) l()
 }
 
+// Reflect writes made in another tab (localStorage 'storage' events fire in the
+// *other* tabs, not the writer), so the active board / added list stays in sync.
+if (typeof window !== 'undefined') {
+  window.addEventListener('storage', () => emit())
+}
+
 function subscribe(listener: () => void): () => void {
   listeners.add(listener)
   return () => listeners.delete(listener)
@@ -140,6 +172,6 @@ export function useBoardStore() {
     activateBoard,
     setAngle,
     setFlipped,
-    setActiveHoldSetsCsv,
+    setActiveHoldSetsRaw,
   }
 }

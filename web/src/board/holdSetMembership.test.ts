@@ -42,6 +42,13 @@ describe('isClimbable', () => {
     expect(isClimbable(mini, problem, allInstalled)).toBe(true)
   })
 
+  it('treats a hold with no owning set as not climbable', () => {
+    // Distinct from the empty-map case: a populated board where the hold sits on
+    // a position no set owns (setIdAt undefined) must fail the guard.
+    expect(setIdAt(mini, 99, 99)).toBeUndefined()
+    expect(isClimbable(mini, [hold(99, 99)], new Set([28, 29, 30, 31]))).toBe(false)
+  })
+
   it('never filters when the membership map is empty', () => {
     const empty = membershipFor('DoesNotExist')
     expect(isClimbable(empty, [hold(0, 1)], new Set())).toBe(true)

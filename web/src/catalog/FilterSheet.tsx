@@ -1,17 +1,18 @@
-// Filter FAB + bottom sheet, iOS-style: a floating button (above the bottom nav)
-// with an active-filter count badge opens a bottom sheet holding all the filter
-// and sort controls. Search stays in the catalog top bar.
+// Filter FAB + swipe drawer, iOS-style: a floating button (above the bottom nav)
+// with an active-filter count badge opens a bottom drawer holding all the filter
+// and sort controls. Uses the same shadcn Drawer (swipe handle) as the board
+// config. Search stays in the catalog top bar.
 
 import { SlidersHorizontal } from 'lucide-react'
 import { FilterControls } from './FilterControls'
 import { activeFilterCount, type FilterState } from './filters'
 import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-  SheetTrigger,
-} from '@/components/ui/sheet'
+  Drawer,
+  DrawerContent,
+  DrawerHeader,
+  DrawerTitle,
+  DrawerTrigger,
+} from '@/components/ui/drawer'
 
 interface FilterSheetProps {
   state: FilterState
@@ -23,8 +24,8 @@ interface FilterSheetProps {
 export function FilterSheet({ state, onChange, gradeSpan, methods }: FilterSheetProps) {
   const count = activeFilterCount(state)
   return (
-    <Sheet>
-      <SheetTrigger
+    <Drawer showSwipeHandle>
+      <DrawerTrigger
         aria-label="Filters"
         className="fixed right-4 bottom-24 z-30 flex size-14 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg transition hover:opacity-90"
       >
@@ -34,15 +35,15 @@ export function FilterSheet({ state, onChange, gradeSpan, methods }: FilterSheet
             {count}
           </span>
         )}
-      </SheetTrigger>
-      <SheetContent side="bottom" className="max-h-[85vh] overflow-y-auto">
-        <SheetHeader>
-          <SheetTitle>Filters</SheetTitle>
-        </SheetHeader>
-        <div className="px-4 pb-8">
+      </DrawerTrigger>
+      <DrawerContent>
+        <DrawerHeader>
+          <DrawerTitle>Filters</DrawerTitle>
+        </DrawerHeader>
+        <div className="max-h-[70vh] overflow-y-auto px-4 pb-8">
           <FilterControls state={state} onChange={onChange} gradeSpan={gradeSpan} methods={methods} />
         </div>
-      </SheetContent>
-    </Sheet>
+      </DrawerContent>
+    </Drawer>
   )
 }

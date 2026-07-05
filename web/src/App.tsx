@@ -17,18 +17,14 @@ function App() {
   const noBoards = addedBoards.length === 0
 
   return (
-    <div className="app">
-      <header className="flex items-center justify-between gap-2">
-        <h1 className="text-lg font-bold">MoonBoard LED</h1>
-        <Navigation
-          view={effectiveView}
-          onNavigate={setView}
-          disabled={noBoards ? ['catalog'] : []}
-        />
+    <div className="app pb-24">
+      <header className="mb-3">
+        <h1 className="text-base font-semibold tracking-tight">MoonBoard LED</h1>
       </header>
       {effectiveView === 'catalog' && <CatalogScreen />}
       {effectiveView === 'boards' && <MyBoards onActivated={() => setView('catalog')} />}
       {effectiveView === 'build' && <BuildScreen />}
+      <Navigation view={effectiveView} onNavigate={setView} disabled={noBoards ? ['catalog'] : []} />
     </div>
   )
 }

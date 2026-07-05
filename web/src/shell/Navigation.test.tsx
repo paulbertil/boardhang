@@ -6,7 +6,7 @@ describe('Navigation', () => {
   it('renders the tabs and marks the current one', () => {
     render(<Navigation view="catalog" onNavigate={() => {}} />)
     expect(screen.getByRole('button', { name: 'Catalog' })).toHaveAttribute('aria-current', 'page')
-    expect(screen.getByRole('button', { name: 'My Boards' })).not.toHaveAttribute('aria-current')
+    expect(screen.getByRole('button', { name: 'Boards' })).not.toHaveAttribute('aria-current')
   })
 
   it('navigates on click', () => {

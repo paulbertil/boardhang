@@ -1,14 +1,15 @@
-// Top-level navigation between the app's primary surfaces. "Detail" is a
-// sub-view of the catalog and has no tab.
+// Bottom tab bar — thumb-reachable navigation for a phone at the wall. "Detail"
+// is a sub-view of the catalog and has no tab.
 
-import { Button } from '@/components/ui/button'
+import { Blocks, Grid3x3, Layers } from 'lucide-react'
+import { cn } from '@/lib/utils'
 
 export type NavView = 'build' | 'boards' | 'catalog'
 
-const TABS: { view: NavView; label: string }[] = [
-  { view: 'catalog', label: 'Catalog' },
-  { view: 'boards', label: 'My Boards' },
-  { view: 'build', label: 'Build' },
+const TABS: { view: NavView; label: string; Icon: typeof Blocks }[] = [
+  { view: 'catalog', label: 'Catalog', Icon: Blocks },
+  { view: 'boards', label: 'Boards', Icon: Layers },
+  { view: 'build', label: 'Build', Icon: Grid3x3 },
 ]
 
 interface NavigationProps {
@@ -20,20 +21,33 @@ interface NavigationProps {
 
 export function Navigation({ view, onNavigate, disabled = [] }: NavigationProps) {
   return (
-    <nav className="flex gap-1" aria-label="Primary">
-      {TABS.map((tab) => (
-        <Button
-          key={tab.view}
-          variant={view === tab.view ? 'default' : 'ghost'}
-          size="sm"
-          disabled={disabled.includes(tab.view)}
-          title={disabled.includes(tab.view) ? 'Add a board first' : undefined}
-          aria-current={view === tab.view ? 'page' : undefined}
-          onClick={() => onNavigate(tab.view)}
-        >
-          {tab.label}
-        </Button>
-      ))}
+    <nav
+      aria-label="Primary"
+      className="fixed inset-x-0 bottom-0 z-20 border-t border-border bg-background/90 pb-[env(safe-area-inset-bottom)] backdrop-blur"
+    >
+      <div className="mx-auto flex max-w-md">
+        {TABS.map(({ view: v, label, Icon }) => {
+          const active = view === v
+          const isDisabled = disabled.includes(v)
+          return (
+            <button
+              key={v}
+              type="button"
+              disabled={isDisabled}
+              aria-current={active ? 'page' : undefined}
+              onClick={() => onNavigate(v)}
+              className={cn(
+                'flex flex-1 flex-col items-center gap-0.5 py-2.5 text-[0.7rem] font-medium transition-colors',
+                active ? 'text-foreground' : 'text-muted-foreground hover:text-foreground',
+                isDisabled && 'pointer-events-none opacity-35',
+              )}
+            >
+              <Icon className={cn('size-5', active && 'stroke-[2.5]')} />
+              {label}
+            </button>
+          )
+        })}
+      </div>
     </nav>
   )
 }

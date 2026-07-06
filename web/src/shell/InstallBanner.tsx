@@ -7,7 +7,7 @@
 
 import { useEffect, useState } from 'react'
 import { Download, X } from 'lucide-react'
-import { Card, CardContent } from '@/components/ui/card'
+import { Item, ItemActions, ItemContent, ItemDescription, ItemTitle } from '@/components/ui/item'
 import { Button } from '@/components/ui/button'
 import { INSTALL_DISMISSED_KEY, isStandalone, safeGetItem, safeSetItem } from '@/lib/pwa'
 
@@ -50,14 +50,19 @@ export function InstallBanner() {
   }
 
   return (
-    <Card role="region" aria-label="Install Boardly" className="shrink-0 border-primary/30">
-      <CardContent className="flex items-center gap-3 text-sm">
-        <div className="min-w-0 flex-1 space-y-1">
-          <p className="font-medium">Install Boardly</p>
-          <p className="text-muted-foreground">
-            Add it to your device — a full-screen app that still connects to your board.
-          </p>
-        </div>
+    <Item
+      variant="outline"
+      role="region"
+      aria-label="Install Boardly"
+      className="shrink-0 gap-3 border-primary/30 p-4"
+    >
+      <ItemContent className="min-w-0 gap-1">
+        <ItemTitle className="font-medium">Install Boardly</ItemTitle>
+        <ItemDescription className="line-clamp-none">
+          Add it to your device — a full-screen app that still connects to your board.
+        </ItemDescription>
+      </ItemContent>
+      <ItemActions className="gap-2">
         <Button size="sm" onClick={install} className="shrink-0">
           <Download aria-hidden /> Install
         </Button>
@@ -70,7 +75,7 @@ export function InstallBanner() {
         >
           <X />
         </Button>
-      </CardContent>
-    </Card>
+      </ItemActions>
+    </Item>
   )
 }

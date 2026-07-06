@@ -8,6 +8,8 @@
 //   /                        → redirect: no boards → /boards, else last catalog
 //   /boards                  → MyBoards (global, not board-scoped)
 //   /logbook                 → LogbookScreen
+//   /lists                   → ListsScreen  (Saved Lists index; requires sign-in)
+//   /lists/$listId           → ListDetailScreen
 //   /settings                → SettingsScreen (global; appearance/theme)
 //   /board/$layoutId/catalog → CatalogScreen  (search params: see catalogSearch.ts)
 //
@@ -28,6 +30,8 @@ import { AppLayout } from './shell/AppLayout'
 import { MyBoards } from './shell/MyBoards'
 import { SettingsScreen } from './shell/SettingsScreen'
 import { LogbookScreen } from './logbook/LogbookScreen'
+import { ListsScreen } from './lists/ListsScreen'
+import { ListDetailScreen } from './lists/ListDetailScreen'
 import { CatalogScreen } from './catalog/CatalogScreen'
 import { boardByLayoutId } from './board/boards'
 import { getActiveBoardId, getAddedBoardIds } from './board/boardStore'
@@ -87,6 +91,18 @@ function buildRouteTree() {
     component: SettingsScreen,
   })
 
+  const listsRoute = createRoute({
+    getParentRoute: () => rootRoute,
+    path: '/lists',
+    component: ListsScreen,
+  })
+
+  const listDetailRoute = createRoute({
+    getParentRoute: () => rootRoute,
+    path: '/lists/$listId',
+    component: ListDetailScreen,
+  })
+
   const catalogRoute = createRoute({
     getParentRoute: () => rootRoute,
     path: '/board/$layoutId/catalog',
@@ -108,6 +124,8 @@ function buildRouteTree() {
     boardsRoute,
     logbookRoute,
     settingsRoute,
+    listsRoute,
+    listDetailRoute,
     catalogRoute,
   ])
 }

@@ -1,14 +1,11 @@
-import { fireEvent, render, screen } from '@testing-library/react'
+import { fireEvent, screen } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { CatalogProblem } from './catalogSync'
 import { recordRecent } from './recentsStore'
-import { DEFAULT_FILTERS } from './filters'
-import { CatalogScreen } from './CatalogScreen'
-import { AuthProvider } from '../auth/AuthProvider'
+import { addBoard } from '../board/boardStore'
+import { renderWithRouter } from '../test/renderWithRouter'
 
-// Board 7 / angle 40 is the default board+angle with a clean localStorage
-// (DEFAULT_ACTIVE = 7, board 7's only angle is 40), so CatalogScreen resolves
-// to that slab without any seeding.
+// Board 7 / angle 40 is the default board+angle (board 7's only angle is 40).
 const LAYOUT = 7
 const ANGLE = 40
 
@@ -56,37 +53,30 @@ beforeEach(() => {
   localStorage.clear()
   window.dispatchEvent(new StorageEvent('storage'))
   vi.clearAllMocks()
-  // Active grade/stars filter that narrows the displayed list to 'Visible'.
-  localStorage.setItem(
-    `catalogFilters_${LAYOUT}_${ANGLE}`,
-    JSON.stringify({ ...DEFAULT_FILTERS, minStars: 1 }),
-  )
 })
 
 describe('CatalogScreen — recents open as their own stack', () => {
-  it('opens a filtered-out recent and pages within the recents stack, not the slab', () => {
+  it('opens a filtered-out recent and pages within the recents stack, not the slab', async () => {
+    addBoard(LAYOUT)
     // Both hidden by the minStars filter; recents order becomes [C, B] (newest first).
     recordRecent(LAYOUT, ANGLE, 'b')
     recordRecent(LAYOUT, ANGLE, 'c')
-    render(
-      <AuthProvider>
-        <CatalogScreen />
-      </AuthProvider>,
-    )
+    // The filter is URL-driven now: ?stars=1 narrows the displayed list to 'Visible'.
+    renderWithRouter(`/board/${LAYOUT}/catalog?stars=1`)
 
     // Precondition: the filter hides both recents from the main list.
-    expect(screen.getByText('Visible')).toBeInTheDocument()
+    expect(await screen.findByText('Visible')).toBeInTheDocument()
     expect(screen.queryByText('HiddenB')).toBeNull()
     expect(screen.queryByText('HiddenC')).toBeNull()
 
-    // Open the sheet and tap the newest recent (C), which is filtered out.
+    // Open the recents sheet and tap the newest recent (C), which is filtered out.
     fireEvent.click(screen.getByRole('button', { name: /recently viewed/i }))
-    fireEvent.click(screen.getByText('HiddenC'))
+    fireEvent.click(await screen.findByText('HiddenC'))
 
-    // Detail opens on C. C is first in the recents stack, so Previous is disabled
-    // and Next is enabled — unlike slab paging, where C (last slab entry) would
-    // have Next disabled and Previous -> the non-recent 'HiddenB'/'Visible'.
-    expect(screen.getByText('HiddenC')).toBeInTheDocument()
+    // Detail opens on C. C is first in the recents stack, so Previous is disabled and
+    // Next is enabled — unlike slab paging, where C (last slab entry) would have Next
+    // disabled and Previous -> the non-recent 'HiddenB'/'Visible'.
+    expect(await screen.findByRole('heading', { name: 'HiddenC' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /previous problem/i })).toBeDisabled()
     const next = screen.getByRole('button', { name: /next problem/i })
     expect(next).toBeEnabled()
@@ -94,7 +84,7 @@ describe('CatalogScreen — recents open as their own stack', () => {
     // Next steps to the other recent (B), proving the pager traverses the recents
     // stack (newest->oldest), never the in-between slab entries.
     fireEvent.click(next)
-    expect(screen.getByText('HiddenB')).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'HiddenB' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /next problem/i })).toBeDisabled()
   })
 })

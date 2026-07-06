@@ -8,12 +8,14 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { Link } from '@tanstack/react-router'
-import { Bookmark, Check, ChevronRight } from 'lucide-react'
+import { Bookmark, CalendarDays, Check, ChevronRight } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAuth } from '../auth/AuthProvider'
 import type { CatalogBoardDef } from '../board/boards'
 import { Button } from '@/components/ui/button'
+import { Calendar } from '@/components/ui/calendar'
 import { Input } from '@/components/ui/input'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Toggle } from '@/components/ui/toggle'
 import {
   Drawer,
@@ -32,7 +34,7 @@ import {
   useSavedLists,
 } from './listsStore'
 import { listIdsContaining } from './listsSync'
-import { trimListName } from './listsTypes'
+import { formatListDate, trimListName } from './listsTypes'
 
 /** Common list names offered as quick-fill pills under the new-list input. */
 const NAME_SUGGESTIONS = ['Projects', 'Warmups', 'Ticklist', 'To try'] as const
@@ -53,6 +55,15 @@ export function AddToListSheet({ open, onOpenChange, sourceCatalogId, board }: A
   const [members, setMembers] = useState<Set<string>>(new Set())
   const [newName, setNewName] = useState('')
   const [creating, setCreating] = useState(false)
+  // Date-picker pill: open state + the selected day (defaults to tomorrow, the common
+  // "plan the next session" case). Picking a day fills the name field via formatListDate.
+  const [dateOpen, setDateOpen] = useState(false)
+  const [pickedDate, setPickedDate] = useState<Date>(() => {
+    const d = new Date()
+    d.setHours(0, 0, 0, 0)
+    d.setDate(d.getDate() + 1)
+    return d
+  })
   // Membership rows with a mutation in flight — blocks a concurrent double-fire and dims
   // the row (BUG B). The ref is the synchronous guard (a second click in the same tick
   // reads it before React re-renders); the state mirror drives the disabled UI.
@@ -274,6 +285,33 @@ export function AddToListSheet({ open, onOpenChange, sourceCatalogId, board }: A
                   </Toggle>
                 )
               })}
+              {/* Date pill — a sibling chip whose click opens the shadcn Calendar; picking a
+                  day writes a "Tue, Jul 7" name into the field. Pressed while the popover is
+                  open so it reads like the other pills. */}
+              <Popover open={dateOpen} onOpenChange={setDateOpen}>
+                <PopoverTrigger
+                  render={
+                    <Toggle size="sm" variant="outline" pressed={dateOpen} aria-label="Name the list by date">
+                      <CalendarDays className="size-4" />
+                      Date
+                    </Toggle>
+                  }
+                />
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar
+                    mode="single"
+                    required
+                    selected={pickedDate}
+                    defaultMonth={pickedDate}
+                    onSelect={(d) => {
+                      setPickedDate(d)
+                      setNewName(formatListDate(d))
+                      setDateOpen(false)
+                    }}
+                    autoFocus
+                  />
+                </PopoverContent>
+              </Popover>
             </div>
           </div>
         </form>

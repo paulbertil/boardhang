@@ -193,6 +193,27 @@ describe('AddToListSheet', () => {
     expect(await screen.findByRole('button', { name: 'Save' })).toBeDisabled()
   })
 
+  it('the date pill opens the calendar and fills the name with the picked day', async () => {
+    lists = []
+    mount()
+    // Open the calendar popover from its sibling pill.
+    fireEvent.click(await screen.findByRole('button', { name: 'Name the list by date' }))
+    expect(await screen.findByRole('grid')).toBeInTheDocument()
+
+    // Click a day cell (buttons whose label is just a number) → it fills the name field
+    // with a formatted date and closes the popover.
+    const dayButton = screen
+      .getAllByRole('button')
+      .find((b) => /^\d{1,2}$/.test((b.textContent ?? '').trim()))
+    expect(dayButton).toBeDefined()
+    fireEvent.click(dayButton!)
+
+    await waitFor(() => {
+      const input = screen.getByRole('textbox', { name: 'New list name' }) as HTMLInputElement
+      expect(input.value).toMatch(/^\w{3}, \w{3} \d{1,2}$/)
+    })
+  })
+
   it('with no lists, the create form is the empty state — no dashed box or "pick a list" hint', async () => {
     lists = [savedList('l5', 'Fives', 5)] // different board → this board has none
     mount()

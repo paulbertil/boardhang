@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   boardShortLabel,
+  formatListDate,
   fromListProblemRow,
   fromListRow,
   trimListName,
@@ -83,5 +84,16 @@ describe('trimListName', () => {
   it('leaves an empty/whitespace-only name empty (the caller rejects it)', () => {
     expect(trimListName('   ')).toBe('')
     expect(trimListName('')).toBe('')
+  })
+})
+
+describe('formatListDate', () => {
+  it('formats as weekday, month, day with no year', () => {
+    // 2026-07-07 is a Tuesday (constructed with local components → no tz date shift).
+    expect(formatListDate(new Date(2026, 6, 7))).toBe('Tue, Jul 7')
+  })
+
+  it('always matches the "Ddd, Mmm D" shape', () => {
+    expect(formatListDate(new Date(2026, 11, 25))).toMatch(/^\w{3}, \w{3} \d{1,2}$/)
   })
 })

@@ -107,3 +107,9 @@ export const MAX_LIST_NAME = 60
 export function trimListName(raw: string): string {
   return raw.trim().slice(0, MAX_LIST_NAME)
 }
+
+/** Format a date as a list name — a readable "Tue, Jul 7" the date-picker writes into
+ *  the name field. Locale-aware; no year (these are near-term session lists). */
+export function formatListDate(d: Date): string {
+  return d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })
+}

@@ -24,6 +24,7 @@ import { filtersToSearch, searchToFilters } from './catalogSearch'
 import { saveSeed } from './filterSeed'
 import { useFavorites } from './favoritesStore'
 import { useSlab } from './useSlab'
+import { useEnsureAscentsLoaded } from '../logbook/ascents'
 import type { CatalogProblem } from './catalogSync'
 
 const routeApi = getRouteApi('/board/$layoutId/catalog')
@@ -52,6 +53,22 @@ export function CatalogScreen() {
 
   const { problems, loading, degraded } = useSlab(board.layoutId, angle)
   const { favoriteIds } = useFavorites()
+
+  // Logged sends → the green "sent" check on rows/detail (iOS parity). The ascents
+  // store is a global singleton the Logbook tab also feeds; ensure it's loaded here too
+  // so the check appears even when the catalog is opened without first visiting the logbook.
+  const { ascents } = useEnsureAscentsLoaded()
+  // Board-scoped, mirroring the Logbook tab: a send counts for this board's catalog
+  // only. `sent === false` rows (attempts) are excluded — only true sends get the check.
+  const sentIds = useMemo(
+    () =>
+      new Set(
+        ascents
+          .filter((a) => a.sent && a.boardLayoutId === board.layoutId && a.sourceCatalogId)
+          .map((a) => a.sourceCatalogId as string),
+      ),
+    [ascents, board.layoutId],
+  )
 
   const filters = useMemo(() => searchToFilters(search), [search])
 
@@ -157,6 +174,7 @@ export function CatalogScreen() {
         loading={loading}
         degraded={degraded}
         favoriteIds={favoriteIds}
+        sentIds={sentIds}
         transform={transform}
         searchActive={filters.search.trim().length > 0}
         highlightHolds={highlightHolds}
@@ -166,7 +184,7 @@ export function CatalogScreen() {
           mt-auto pins it to the bottom of the flex-column scroll region; sticky
           keeps it there as a long list scrolls; pointer-events fall through. */}
       <div className="pointer-events-none sticky bottom-4 z-30 mt-auto flex flex-col items-end gap-3">
-        <RecentsSheet board={board} angle={angle} problems={problems} favoriteIds={favoriteIds} onSelect={openRecent} />
+        <RecentsSheet board={board} angle={angle} problems={problems} favoriteIds={favoriteIds} sentIds={sentIds} onSelect={openRecent} />
         <FilterSheet state={filters} onChange={setFilters} board={board} gradeSpan={gradeSpan} methods={methods} />
       </div>
 
@@ -181,6 +199,7 @@ export function CatalogScreen() {
                 board={board}
                 angle={angle}
                 favoriteIds={favoriteIds}
+                sentIds={sentIds}
                 highlightHolds={highlightHolds}
                 onNavigate={showProblem}
               />

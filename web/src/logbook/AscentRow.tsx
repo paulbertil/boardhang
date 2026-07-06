@@ -7,7 +7,7 @@
 // `onSelect` hook is here so wiring row → problem detail is a one-liner once the router
 // lands. The pencil opens the edit sheet.
 
-import { ArrowDown, ArrowUp, BadgeCheck, Pencil, Star } from 'lucide-react'
+import { ArrowDown, ArrowUp, BadgeCheck, CheckCircle2, Pencil, Star } from 'lucide-react'
 import type { CatalogBoardDef } from '../board/boards'
 import { CatalogBoard } from '../board/CatalogBoard'
 import { gradeIndex } from '../board/grades'
@@ -68,7 +68,9 @@ export function AscentRow({
           {catalog?.is_benchmark && (
             <BadgeCheck role="img" aria-label="Benchmark" className="size-4 shrink-0 text-benchmark" />
           )}
-          {!ascent.sent && (
+          {ascent.sent ? (
+            <CheckCircle2 role="img" aria-label="Sent" className="size-4 shrink-0 text-success" />
+          ) : (
             <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-[0.65rem] font-medium text-muted-foreground">
               Attempt
             </span>

@@ -32,6 +32,7 @@ function renderSheet(problems: CatalogProblem[], onSelect = vi.fn()) {
       angle={40}
       problems={problems}
       favoriteIds={new Set()}
+      sentIds={new Set()}
       onSelect={onSelect}
     />,
   )

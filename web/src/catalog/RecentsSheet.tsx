@@ -21,11 +21,13 @@ interface RecentsSheetProps {
   /** The full (unfiltered) slab — recents are resolved against it, filter-independent. */
   problems: CatalogProblem[]
   favoriteIds: Set<string>
+  /** Catalog ids the user has a logged send for — drives the green sent check. */
+  sentIds: Set<string>
   /** Open the tapped recent, paging over the recents stack (this snapshot) at `index`. */
   onSelect: (stack: CatalogProblem[], index: number) => void
 }
 
-export function RecentsSheet({ board, angle, problems, favoriteIds, onSelect }: RecentsSheetProps) {
+export function RecentsSheet({ board, angle, problems, favoriteIds, sentIds, onSelect }: RecentsSheetProps) {
   const [open, setOpen] = useState(false)
   const showThumbnails = useShowPreviews()
   const recentIds = useRecents(board.layoutId, angle)
@@ -71,6 +73,7 @@ export function RecentsSheet({ board, angle, problems, favoriteIds, onSelect }: 
               problem={p}
               board={board}
               isFavorite={favoriteIds.has(p.source_catalog_id)}
+              isSent={sentIds.has(p.source_catalog_id)}
               showThumbnail={showThumbnails}
               onSelect={() => {
                 // Page over the recents snapshot (newest→oldest) at the tapped row.

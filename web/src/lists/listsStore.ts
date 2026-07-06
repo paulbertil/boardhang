@@ -20,12 +20,15 @@ import {
   readLists,
   syncLists,
 } from './listsSync'
-import type { ListProblemRow, ListRow, SavedList, SavedListProblem } from './listsTypes'
-
-// Explicit column projection for reconciling writes — never `*` (KTD-I10).
-const LIST_COLUMNS = 'id, owner_id, name, board_layout_id, created_at, updated_at, deleted'
-const LIST_PROBLEM_COLUMNS =
-  'id, list_id, source_catalog_id, board_layout_id, added_by, created_at, updated_at, deleted'
+import {
+  LIST_COLUMNS,
+  LIST_PROBLEM_COLUMNS,
+  fromListRow,
+  type ListProblemRow,
+  type ListRow,
+  type SavedList,
+  type SavedListProblem,
+} from './listsTypes'
 
 /** `offline` = a cold-cache load whose pull failed with nothing cached, so the screen
  *  can distinguish "no lists" from "couldn't reach your lists". */
@@ -166,7 +169,7 @@ export async function createList(name: string, boardLayoutId: number): Promise<S
     throw new Error(error.message)
   }
   // Reconcile the temp id with the authoritative server row.
-  const saved: SavedList = mapList(data as ListRow)
+  const saved: SavedList = fromListRow(data as ListRow)
   setState({
     lists: sortNewestFirst([saved, ...state.lists.filter((l) => l.id !== optimistic.id)]),
   })
@@ -293,18 +296,6 @@ export async function removeProblem(listId: string, sourceCatalogId: string): Pr
   }
 }
 
-function mapList(row: ListRow): SavedList {
-  return {
-    id: row.id,
-    ownerId: row.owner_id,
-    name: row.name,
-    boardLayoutId: row.board_layout_id,
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
-    deleted: row.deleted,
-  }
-}
-
 // ─── Auth lifecycle (KTD-I9) ──────────────────────────────────────────────────
 
 const LAST_USER_KEY = 'listsLastUserId'
@@ -321,8 +312,12 @@ export async function syncListsIdentity(userId: string | null): Promise<void> {
   const next = userId ?? ''
   const prev = localStorage.getItem(LAST_USER_KEY)
   if (prev === next) return
-  localStorage.setItem(LAST_USER_KEY, next)
+  // Clear FIRST, then advance the gate. If the clear rejects (IndexedDB quota /
+  // private-mode / VersionError), the gate stays un-advanced so the next auth event
+  // retries the clear — otherwise a stale gate would let user B paint user A's warm
+  // cache on a shared device (the KTD-I9 leak this ordering exists to prevent).
   await resetLists()
+  localStorage.setItem(LAST_USER_KEY, next)
 }
 
 /** Clear the in-memory store and the IndexedDB cache (sign-out / user switch). */

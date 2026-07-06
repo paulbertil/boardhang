@@ -13,6 +13,8 @@
 
 import { supabase } from '../supabase/client'
 import {
+  LIST_COLUMNS,
+  LIST_PROBLEM_COLUMNS,
   fromListProblemRow,
   fromListRow,
   type ListProblemRow,
@@ -29,10 +31,8 @@ const LISTS_CURSOR = 'listsCursor'
 const PROBLEMS_CURSOR = 'listProblemsCursor'
 const EPOCH = '1970-01-01T00:00:00+00:00'
 
-// Explicit projections — NOT `*` — so invite_token never leaves the server (KTD-I10).
-const LIST_COLUMNS = 'id, owner_id, name, board_layout_id, created_at, updated_at, deleted'
-const LIST_PROBLEM_COLUMNS =
-  'id, list_id, source_catalog_id, board_layout_id, added_by, created_at, updated_at, deleted'
+// Column projections (LIST_COLUMNS / LIST_PROBLEM_COLUMNS) live in listsTypes.ts as the
+// single source of the KTD-I10 "never select invite_token" invariant — NOT `*`.
 
 function openDB(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {

@@ -18,6 +18,16 @@ export interface ListRow {
   deleted: boolean
 }
 
+/**
+ * Explicit column projections for every `lists` / `list_problems` read and reconcile —
+ * NEVER `*`. This is the single source of the KTD-I10 invariant that `invite_token` (the
+ * share-link capability secret) never leaves the server or lands in the offline cache.
+ * Both the sync pull (listsSync) and the write reconciles (listsStore) select these.
+ */
+export const LIST_COLUMNS = 'id, owner_id, name, board_layout_id, created_at, updated_at, deleted'
+export const LIST_PROBLEM_COLUMNS =
+  'id, list_id, source_catalog_id, board_layout_id, added_by, created_at, updated_at, deleted'
+
 /** A `list_problems` row — one catalog problem in a list's pile. */
 export interface ListProblemRow {
   id: string

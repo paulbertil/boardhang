@@ -108,8 +108,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // whenever the signed-in identity changes — sign-out or a different user — so on a
       // shared device user B never paints user A's cached lists. A restored same-user
       // session is a no-op. Only touches localStorage/IndexedDB, so it's safe to await
-      // inside the auth callback (no re-entrant Supabase call).
-      await syncListsIdentity(session?.user.id ?? null)
+      // inside the auth callback (no re-entrant Supabase call). Guarded so a best-effort
+      // cache-clear failure can never stall auth restore (isRestoring stuck true).
+      try {
+        await syncListsIdentity(session?.user.id ?? null)
+      } catch {
+        // Clearing the cache is best-effort; the gate stays un-advanced (see
+        // syncListsIdentity) so a later auth event retries. Auth must proceed.
+      }
       if (!session) {
         applyProfile(null)
         setStatus('signedOut')

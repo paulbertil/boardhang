@@ -151,6 +151,15 @@ describe('drawer history semantics', () => {
     expect(router.state.location.pathname).toBe('/board/7/catalog')
   })
 
+  it('pages a cold deep-linked problem across the filtered list (no recents session)', async () => {
+    addBoard(7)
+    renderWithRouter('/board/7/catalog?problem=a')
+    // No recents interaction → pagerStack is null → the pager domain is `displayed`.
+    expect(await screen.findByRole('heading', { name: 'Alpha' })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Next problem' }))
+    expect(await screen.findByRole('heading', { name: 'Bravo' })).toBeInTheDocument()
+  })
+
   it('pages with replace so a single Back returns to the catalog, not prior problems', async () => {
     addBoard(7)
     const { router } = renderWithRouter('/board/7/catalog')

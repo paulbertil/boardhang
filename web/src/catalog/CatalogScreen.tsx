@@ -97,9 +97,10 @@ export function CatalogScreen() {
   const [pagerStack, setPagerStack] = useState<CatalogProblem[] | null>(null)
   const openId = search.problem
   const pagerList = pagerStack ?? displayed
+  // Resolve against the active pager domain, falling back to the full slab so a
+  // deep-linked problem the filters exclude still opens (standalone, prev/next off).
   const current = openId
     ? (pagerList.find((p) => p.source_catalog_id === openId) ??
-      displayed.find((p) => p.source_catalog_id === openId) ??
       problems.find((p) => p.source_catalog_id === openId))
     : undefined
   const drawerOpen = current !== undefined

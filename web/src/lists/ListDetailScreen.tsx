@@ -14,6 +14,7 @@ import { CatalogRow } from '../catalog/CatalogRow'
 import { ProblemDetail } from '../catalog/ProblemDetail'
 import { getCatalogProblemsByIds, type CatalogProblem } from '../catalog/catalogSync'
 import { useFavorites } from '../catalog/favoritesStore'
+import { useShowPreviews } from '../catalog/previewsStore'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Drawer, DrawerContent, DrawerTitle } from '@/components/ui/drawer'
@@ -83,6 +84,7 @@ export function ListDetailScreen() {
   )
 
   const { favoriteIds } = useFavorites()
+  const showThumbnails = useShowPreviews()
   const [openId, setOpenId] = useState<string | null>(null)
   const current = openId ? displayed.find((p) => p.source_catalog_id === openId) : undefined
 
@@ -163,7 +165,12 @@ export function ListDetailScreen() {
           {displayed.map((p) => (
             <div key={p.source_catalog_id} className="flex items-center">
               <div className="min-w-0 flex-1">
-                <CatalogRow problem={p} board={board!} onSelect={() => setOpenId(p.source_catalog_id)} />
+                <CatalogRow
+                  problem={p}
+                  board={board!}
+                  showThumbnail={showThumbnails}
+                  onSelect={() => setOpenId(p.source_catalog_id)}
+                />
               </div>
               {angles.length > 1 && (
                 <span className="shrink-0 px-1 text-xs tabular-nums text-muted-foreground">{p.angle}°</span>

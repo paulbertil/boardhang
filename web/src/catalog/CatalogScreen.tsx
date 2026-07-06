@@ -54,6 +54,9 @@ export function CatalogScreen() {
   )
   const displayed = useMemo(() => transform(problems), [transform, problems])
 
+  // Ring the actively-filtered holds on thumbnails + the detail board (iOS parity).
+  const highlightHolds = useMemo(() => new Set(filters.holdsFilter), [filters.holdsFilter])
+
   const openProblem = (problem: CatalogProblem) => {
     const i = displayed.findIndex((p) => p.source_catalog_id === problem.source_catalog_id)
     if (i >= 0) setOpenIndex(i)
@@ -70,9 +73,10 @@ export function CatalogScreen() {
         favoriteIds={favoriteIds}
         transform={transform}
         searchActive={searchQuery.trim().length > 0}
+        highlightHolds={highlightHolds}
         onSelect={openProblem}
       />
-      <FilterSheet state={filters} onChange={setFilters} gradeSpan={gradeSpan} methods={methods} />
+      <FilterSheet state={filters} onChange={setFilters} board={board} gradeSpan={gradeSpan} methods={methods} />
 
       <Drawer open={openIndex !== null} onOpenChange={(open) => !open && setOpenIndex(null)} showSwipeHandle>
         <DrawerContent>
@@ -85,6 +89,7 @@ export function CatalogScreen() {
                 board={board}
                 angle={angle}
                 favoriteIds={favoriteIds}
+                highlightHolds={highlightHolds}
                 onClose={() => setOpenIndex(null)}
               />
             </div>

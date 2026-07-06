@@ -14,6 +14,8 @@ interface CatalogRowProps {
   isFavorite?: boolean
   /** Show the board thumbnail (iOS "climb previews" toggle). */
   showThumbnail?: boolean
+  /** "col-row" positions from the active holds filter to ring on the thumbnail. */
+  highlightHolds?: Set<string>
   onSelect?: (problem: CatalogProblem) => void
 }
 
@@ -22,6 +24,7 @@ export function CatalogRow({
   board,
   isFavorite = false,
   showThumbnail = false,
+  highlightHolds,
   onSelect,
 }: CatalogRowProps) {
   const subtitle = problem.setter ? `by ${problem.setter}` : `${problem.holds.length} holds`
@@ -33,7 +36,7 @@ export function CatalogRow({
     >
       {showThumbnail && (
         <div className="w-[72px] shrink-0">
-          <CatalogBoard board={board} holds={problem.holds} />
+          <CatalogBoard board={board} holds={problem.holds} highlightHolds={highlightHolds} />
         </div>
       )}
       <div className="min-w-0 flex-1">

@@ -1,10 +1,12 @@
 import { fireEvent, render, renderHook, screen, act } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { boardByLayoutId } from '../board/boards'
 import { DEFAULT_FILTERS, type FilterState } from './filters'
 import { FilterControls } from './FilterControls'
 import { useFilters } from './useFilters'
 
 const gradeSpan: [number, number] = [3, 15]
+const board = boardByLayoutId(7)!
 
 function setup(over: Partial<FilterState> = {}) {
   const state = { ...DEFAULT_FILTERS, ...over }
@@ -13,6 +15,7 @@ function setup(over: Partial<FilterState> = {}) {
     <FilterControls
       state={state}
       onChange={onChange}
+      board={board}
       gradeSpan={gradeSpan}
       methods={['Footless', 'No kickboard']}
     />,

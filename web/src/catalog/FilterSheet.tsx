@@ -4,6 +4,7 @@
 // config. Search stays in the catalog top bar.
 
 import { SlidersHorizontal } from 'lucide-react'
+import type { CatalogBoardDef } from '../board/boards'
 import { FilterControls } from './FilterControls'
 import { activeFilterCount, type FilterState } from './filters'
 import {
@@ -17,11 +18,12 @@ import {
 interface FilterSheetProps {
   state: FilterState
   onChange: (state: FilterState) => void
+  board: CatalogBoardDef
   gradeSpan: [number, number]
   methods: string[]
 }
 
-export function FilterSheet({ state, onChange, gradeSpan, methods }: FilterSheetProps) {
+export function FilterSheet({ state, onChange, board, gradeSpan, methods }: FilterSheetProps) {
   const count = activeFilterCount(state)
   return (
     <Drawer showSwipeHandle>
@@ -47,7 +49,7 @@ export function FilterSheet({ state, onChange, gradeSpan, methods }: FilterSheet
           <DrawerTitle>Filters</DrawerTitle>
         </DrawerHeader>
         <div className="max-h-[70vh] overflow-y-auto px-4 pb-[calc(2rem+env(safe-area-inset-bottom))]">
-          <FilterControls state={state} onChange={onChange} gradeSpan={gradeSpan} methods={methods} />
+          <FilterControls state={state} onChange={onChange} board={board} gradeSpan={gradeSpan} methods={methods} />
         </div>
       </DrawerContent>
     </Drawer>

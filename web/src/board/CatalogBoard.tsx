@@ -16,6 +16,9 @@ interface CatalogBoardProps {
   visibleHoldSetIds?: Set<number>
   /** When false (default), move roles collapse to a single blue marker. */
   showBeta?: boolean
+  /** "col-row" positions from the active holds filter to ring in yellow. Only
+      positions the problem actually uses are ringed, so no stray rings appear. */
+  highlightHolds?: Set<string>
 }
 
 /** Marker diameter as a fraction of one column's span on the board art.
@@ -23,6 +26,10 @@ interface CatalogBoardProps {
     size where a thin outline ring would nearly vanish. */
 const MARKER_COLUMN_RATIO = 0.9
 const MARKER_BORDER_WIDTH = '2px'
+/** Yellow ring for holds-filter highlights; a touch larger than the marker so it
+    encircles rather than overlaps it. Matches the picker's selection color. */
+const HIGHLIGHT_COLUMN_RATIO = 1.15
+const HIGHLIGHT_COLOR = '#facc15'
 /** Two-hex-digit alpha (~0.35) appended to a 6-digit hold color for the fill —
     the translucent center iOS draws under the colored ring. */
 const MARKER_FILL_ALPHA = '59'
@@ -56,12 +63,20 @@ export function CatalogBoard({
   holds,
   visibleHoldSetIds,
   showBeta = false,
+  highlightHolds,
 }: CatalogBoardProps) {
   const g = board.geometry
   const overlays = board.holdSets.filter(
     (s) => visibleHoldSetIds === undefined || visibleHoldSetIds.has(s.id),
   )
-  const markerPct = ((1 - g.leftMargin - g.rightMargin) / g.numColumns) * MARKER_COLUMN_RATIO * 100
+  const colSpanPct = ((1 - g.leftMargin - g.rightMargin) / g.numColumns) * 100
+  const markerPct = colSpanPct * MARKER_COLUMN_RATIO
+  const highlightPct = colSpanPct * HIGHLIGHT_COLUMN_RATIO
+  // Ring only the highlighted positions the problem actually uses (a ring on an
+  // empty slot — e.g. an unfiltered recent — would float over bare board art).
+  const rings = highlightHolds
+    ? holds.filter((h) => highlightHolds.has(`${h.c}-${h.r}`))
+    : []
 
   return (
     <div
@@ -113,6 +128,29 @@ export function CatalogBoard({
               border: `${MARKER_BORDER_WIDTH} solid ${holdColor[role]}`,
               boxShadow: '0 0 0 1px rgba(0, 0, 0, 0.35), 0 1px 2px rgba(0, 0, 0, 0.4)',
               boxSizing: 'border-box',
+            }}
+          />
+        )
+      })}
+      {rings.map((h) => {
+        const { x, y } = center(g, h.c, h.r)
+        return (
+          <div
+            key={`ring-${h.c}-${h.r}`}
+            data-testid="hold-highlight"
+            aria-hidden="true"
+            style={{
+              position: 'absolute',
+              left: `${x * 100}%`,
+              top: `${y * 100}%`,
+              width: `${highlightPct}%`,
+              aspectRatio: '1',
+              transform: 'translate(-50%, -50%)',
+              borderRadius: '50%',
+              border: `2px solid ${HIGHLIGHT_COLOR}`,
+              boxShadow: '0 0 0 1px rgba(0, 0, 0, 0.45)',
+              boxSizing: 'border-box',
+              pointerEvents: 'none',
             }}
           />
         )

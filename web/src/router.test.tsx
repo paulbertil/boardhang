@@ -187,3 +187,23 @@ describe('drawer history semantics', () => {
     expect(router.state.location.pathname).toBe('/board/7/catalog')
   })
 })
+
+describe('lists routes', () => {
+  it('renders the lists index at /lists and marks the Lists tab current', async () => {
+    renderWithRouter('/lists')
+    expect(await screen.findByTestId('lists-screen')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Lists' })).toHaveAttribute('aria-current', 'page')
+  })
+
+  it('renders the detail screen for a deep-linked /lists/$listId', async () => {
+    renderWithRouter('/lists/abc')
+    expect(await screen.findByTestId('list-detail-screen')).toBeInTheDocument()
+    // Lists tab stays current on the detail sub-route.
+    expect(screen.getByRole('button', { name: 'Lists' })).toHaveAttribute('aria-current', 'page')
+  })
+
+  it('routes /lists while signed out (the screen owns the sign-in prompt)', async () => {
+    renderWithRouter('/lists')
+    expect(await screen.findByTestId('lists-screen')).toBeInTheDocument()
+  })
+})

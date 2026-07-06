@@ -1,22 +1,23 @@
 // Bottom bar — thumb-reachable navigation for a phone at the wall. Search (the catalog)
 // is ALWAYS the rightmost element.
 //
-// • On a home screen (Boards / Logbook / Settings) the home tabs show clustered on the
-//   left, with a compact Search tab (icon over label, styled like the home tabs) pinned
-//   to the far right: [Boards] [Logbook] [Settings] … [Search].
+// • On a home screen (Boards / Logbook / Lists / Settings) the home tabs show clustered on
+//   the left, with a compact Search tab (icon over label, styled like the home tabs) pinned
+//   to the far right: [Boards] [Logbook] [Lists] [Settings] … [Search].
 // • On the catalog, the bar collapses to just the tab you came from plus the live search
 //   field that expands to fill the width: [origin] [search…]. Only the origin (the last
 //   home screen visited before searching) is shown — the other home tabs are hidden until
-//   you leave the catalog.
+//   you leave the catalog. Lists is home-only: it never opens the catalog, so it is never
+//   a search origin and the collapsed bar is unaffected by it.
 //
 // "Detail" is a sub-view of the catalog and keeps the same bar. Fully prop-driven: the
 // search query and its writes are owned by the router-aware AppLayout, not this bar.
 
-import { BookOpen, Layers, Search, Settings, X } from 'lucide-react'
+import { BookOpen, Bookmark, Layers, Search, Settings, X } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
 
-export type NavView = 'boards' | 'catalog' | 'logbook' | 'settings'
+export type NavView = 'boards' | 'catalog' | 'logbook' | 'lists' | 'settings'
 type HomeView = 'boards' | 'logbook' | 'settings'
 
 interface NavigationProps {
@@ -62,10 +63,11 @@ export function Navigation({
             <SearchField query={query} onQueryChange={onQueryChange} onClear={onClear} />
           </>
         ) : (
-          // Home screens: both tabs left-clustered, the compact Search tab pinned right.
+          // Home screens: the tabs left-clustered, the compact Search tab pinned right.
           <>
             <BoardsTab active={view === 'boards'} onClick={() => onNavigate('boards')} />
             <LogbookTab active={view === 'logbook'} onClick={() => onNavigate('logbook')} />
+            <ListsTab active={view === 'lists'} onClick={() => onNavigate('lists')} />
             <SettingsTab active={view === 'settings'} onClick={() => onNavigate('settings')} />
             <TabButton
               label="Search"
@@ -146,6 +148,17 @@ function SettingsTab({ active, onClick }: { active: boolean; onClick: () => void
       active={active}
       onClick={onClick}
       icon={<Settings className={cn('size-5', active && 'stroke-[2.5]')} />}
+    />
+  )
+}
+
+function ListsTab({ active, onClick }: { active: boolean; onClick: () => void }) {
+  return (
+    <TabButton
+      label="Lists"
+      active={active}
+      onClick={onClick}
+      icon={<Bookmark className={cn('size-5', active && 'fill-current stroke-[2.5]')} />}
     />
   )
 }

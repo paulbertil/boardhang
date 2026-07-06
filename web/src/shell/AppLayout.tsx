@@ -16,6 +16,7 @@ import { AccountMenu } from '../auth/AccountMenu'
 import { useBoardStore } from '../board/boardStore'
 import { catalogNavTarget } from '../catalog/catalogNav'
 import { Navigation, type NavView } from './Navigation'
+import { Toaster } from '@/components/ui/sonner'
 import { BleBrowserBanner } from './BleBrowserBanner'
 import { InstallBanner } from './InstallBanner'
 import { FullscreenTipBanner } from './FullscreenTipBanner'
@@ -36,13 +37,16 @@ export function AppLayout({ children }: { children: ReactNode }) {
   const search = useSearch({ strict: false }) as Partial<CatalogSearch>
   const urlQuery = onCatalog ? (search.q ?? '') : ''
 
+  const onLists = matchRoute({ to: '/lists' }) !== false || matchRoute({ to: '/lists/$listId' }) !== false
   const view: NavView = onCatalog
     ? 'catalog'
     : matchRoute({ to: '/logbook' })
       ? 'logbook'
       : matchRoute({ to: '/settings' })
         ? 'settings'
-        : 'boards'
+        : onLists
+          ? 'lists'
+          : 'boards'
 
   // The home tab shown on the collapsed catalog nav — the last home screen visited.
   const [origin, setOrigin] = useState<'boards' | 'logbook' | 'settings'>('boards')
@@ -105,6 +109,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
     if (next === 'boards') void navigate({ to: '/boards' })
     else if (next === 'logbook') void navigate({ to: '/logbook' })
     else if (next === 'settings') void navigate({ to: '/settings' })
+    else if (next === 'lists') void navigate({ to: '/lists' })
     else {
       // Search button → the active board's catalog (falls back to the MRU front).
       const board = addedBoards.some((b) => b.layoutId === activeBoard.layoutId)
@@ -134,6 +139,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
         onClear={onClear}
         onNavigate={go}
       />
+      <Toaster position="bottom-center" />
     </div>
   )
 }

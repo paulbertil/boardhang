@@ -95,6 +95,24 @@ describe('Navigation', () => {
     expect(onNavigate).toHaveBeenCalledWith('settings')
   })
 
+  it('shows the Lists tab on a home screen and navigates to it', () => {
+    const onNavigate = vi.fn()
+    render(<Navigation {...baseProps} view="boards" onNavigate={onNavigate} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Lists' }))
+    expect(onNavigate).toHaveBeenCalledWith('lists')
+  })
+
+  it('marks Lists current on the lists view', () => {
+    render(<Navigation {...baseProps} view="lists" onNavigate={noop} />)
+    expect(screen.getByRole('button', { name: 'Lists' })).toHaveAttribute('aria-current', 'page')
+    expect(screen.getByRole('button', { name: 'Search' })).toBeInTheDocument()
+  })
+
+  it('is home-only: never shows the Lists tab on the collapsed catalog bar', () => {
+    render(<Navigation {...baseProps} view="catalog" origin="logbook" onNavigate={noop} />)
+    expect(screen.queryByRole('button', { name: 'Lists' })).toBeNull()
+  })
+
   it('reports typing through onQueryChange and clearing through onClear', () => {
     const onQueryChange = vi.fn()
     const onClear = vi.fn()

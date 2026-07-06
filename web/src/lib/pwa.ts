@@ -49,14 +49,16 @@ export function shouldShowBleBrowserPrompt(): boolean {
 }
 
 /**
- * Show the "Add to Home Screen" banner: on iOS, in a Bluetooth-capable browser
- * (Bluefy), but not yet launched from the Home Screen.
+ * Show the "go full-screen in Bluefy" tip: on iOS, in a Bluetooth-capable
+ * browser (Bluefy), that isn't already running app-like (standalone). Bluefy has
+ * no "Add to Home Screen"; its menu's "Enter fullscreen" is the way to hide the
+ * browser bars, so the tip points there.
  */
-export function shouldOfferInstall(): boolean {
+export function shouldOfferFullscreenTip(): boolean {
   return isIosLike() && hasWebBluetooth() && !isStandalone()
 }
 
-export const INSTALL_DISMISSED_KEY = 'moonboard.addToHomeDismissed'
+export const FULLSCREEN_TIP_DISMISSED_KEY = 'moonboard.fullscreenTipDismissed'
 
 // localStorage can throw in restricted embedders like Bluefy (mirrors the
 // best-effort readLS/writeLS in board/boardStore.ts). Never let a persistence

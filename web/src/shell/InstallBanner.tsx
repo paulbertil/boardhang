@@ -1,44 +1,46 @@
-// Dismissable nudge to add the app to the Home Screen. Shown on iOS in a
-// Bluetooth-capable browser (Bluefy) that isn't yet running from the Home
-// Screen. A Home-Screen launch from Bluefy keeps Web Bluetooth working, so this
-// is the path we steer people onto. Dismissal is remembered (best-effort).
+// Dismissable nudge to go full-screen in Bluefy. Bluefy has no "Add to Home
+// Screen" (that's Safari-only on iOS, and a Safari-installed icon loses Web
+// Bluetooth), but its menu has an "Enter fullscreen" item that hides the browser
+// bars for an app-like view while keeping the BLE connection. Shown on iOS in a
+// Bluetooth-capable browser (Bluefy) that isn't already app-like. Dismissal is
+// remembered (best-effort).
 
 import { useState } from 'react'
-import { Plus, Share, X } from 'lucide-react'
+import { Maximize, Menu, X } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { INSTALL_DISMISSED_KEY, safeGetItem, safeSetItem, shouldOfferInstall } from '@/lib/pwa'
+import { FULLSCREEN_TIP_DISMISSED_KEY, safeGetItem, safeSetItem, shouldOfferFullscreenTip } from '@/lib/pwa'
 
 export function InstallBanner() {
   // Both evaluated once at mount: the environment can't change within a session.
-  const [offer] = useState(shouldOfferInstall)
-  const [dismissed, setDismissed] = useState(() => safeGetItem(INSTALL_DISMISSED_KEY) === '1')
+  const [offer] = useState(shouldOfferFullscreenTip)
+  const [dismissed, setDismissed] = useState(() => safeGetItem(FULLSCREEN_TIP_DISMISSED_KEY) === '1')
 
   if (!offer || dismissed) return null
 
   const dismiss = () => {
-    safeSetItem(INSTALL_DISMISSED_KEY, '1')
+    safeSetItem(FULLSCREEN_TIP_DISMISSED_KEY, '1')
     setDismissed(true)
   }
 
   return (
-    <Card role="region" aria-label="Add to Home Screen" className="shrink-0 border-primary/30">
+    <Card role="region" aria-label="Go full screen" className="shrink-0 border-primary/30">
       <CardContent className="flex items-start gap-3 text-sm">
         <div className="min-w-0 flex-1 space-y-1">
-          <p className="font-medium">Add MoonBoard to your Home Screen</p>
+          <p className="font-medium">Hide the browser bars</p>
           <p className="text-muted-foreground">
-            Tap the <Share aria-hidden className="inline size-4 align-text-bottom" /> Share menu,
+            In Bluefy, tap the <Menu aria-hidden className="inline size-4 align-text-bottom" /> menu,
             then{' '}
             <span className="whitespace-nowrap">
-              <Plus aria-hidden className="inline size-4 align-text-bottom" /> Add to Home Screen
+              <Maximize aria-hidden className="inline size-4 align-text-bottom" /> Enter fullscreen
             </span>{' '}
-            — you’ll get a full-screen app that still connects to your board.
+            for a distraction-free view of the wall.
           </p>
         </div>
         <Button
           variant="ghost"
           size="icon-sm"
-          aria-label="Dismiss Add to Home Screen banner"
+          aria-label="Dismiss full-screen tip"
           onClick={dismiss}
           className="-mr-1 shrink-0"
         >

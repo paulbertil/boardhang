@@ -5,7 +5,7 @@ import {
   isStandalone,
   safeGetItem,
   safeSetItem,
-  shouldOfferInstall,
+  shouldOfferFullscreenTip,
   shouldShowBleBrowserPrompt,
 } from './pwa'
 
@@ -111,25 +111,25 @@ describe('shouldShowBleBrowserPrompt', () => {
   })
 })
 
-describe('shouldOfferInstall', () => {
+describe('shouldOfferFullscreenTip', () => {
   it('true on iOS + Bluetooth + browser tab', () => {
     stubEnv({ ua: IPHONE_UA, ble: true, standalone: false })
-    expect(shouldOfferInstall()).toBe(true)
+    expect(shouldOfferFullscreenTip()).toBe(true)
   })
 
   it('false once running from the Home Screen', () => {
     stubEnv({ ua: IPHONE_UA, ble: true, standalone: true })
-    expect(shouldOfferInstall()).toBe(false)
+    expect(shouldOfferFullscreenTip()).toBe(false)
   })
 
   it('false without Web Bluetooth (the BLE-browser prompt owns that case)', () => {
     stubEnv({ ua: IPHONE_UA, ble: false })
-    expect(shouldOfferInstall()).toBe(false)
+    expect(shouldOfferFullscreenTip()).toBe(false)
   })
 
   it('false on desktop', () => {
     stubEnv({ ua: MAC_UA, touch: 0, ble: true })
-    expect(shouldOfferInstall()).toBe(false)
+    expect(shouldOfferFullscreenTip()).toBe(false)
   })
 })
 

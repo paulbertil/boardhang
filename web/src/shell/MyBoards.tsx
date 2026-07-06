@@ -11,7 +11,14 @@ import { getActiveHoldSetsRaw, getAngle, useBoardStore } from '../board/boardSto
 import { activeCsv, holdSetContext } from '../board/holdSetMembership'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent } from '@/components/ui/card'
+import {
+  Item,
+  ItemActions,
+  ItemContent,
+  ItemDescription,
+  ItemGroup,
+  ItemTitle,
+} from '@/components/ui/item'
 import {
   Drawer,
   DrawerContent,
@@ -45,20 +52,22 @@ export function MyBoards({ onActivated }: MyBoardsProps) {
           <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
             My boards
           </h2>
-          {addedBoards.map((board) => (
-            <BoardCard
-              key={board.layoutId}
-              board={board}
-              active={board.layoutId === activeBoard.layoutId}
-              onActivate={() => {
-                activateBoard(board.layoutId)
-                onActivated(board.layoutId)
-              }}
-              onRemove={() => removeBoard(board.layoutId)}
-              onAngle={(angle) => setAngle(board.layoutId, angle)}
-              onHoldSets={(csv) => setActiveHoldSetsRaw(board.layoutId, csv)}
-            />
-          ))}
+          <ItemGroup className="gap-2">
+            {addedBoards.map((board) => (
+              <BoardCard
+                key={board.layoutId}
+                board={board}
+                active={board.layoutId === activeBoard.layoutId}
+                onActivate={() => {
+                  activateBoard(board.layoutId)
+                  onActivated(board.layoutId)
+                }}
+                onRemove={() => removeBoard(board.layoutId)}
+                onAngle={(angle) => setAngle(board.layoutId, angle)}
+                onHoldSets={(csv) => setActiveHoldSetsRaw(board.layoutId, csv)}
+              />
+            ))}
+          </ItemGroup>
         </section>
       )}
 
@@ -67,14 +76,20 @@ export function MyBoards({ onActivated }: MyBoardsProps) {
           <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
             Add a board
           </h2>
-          {addable.map((board) => (
-            <div key={board.layoutId} className="flex items-center justify-between rounded-lg border px-3 py-2">
-              <span className="text-sm">{board.name}</span>
-              <Button size="sm" variant="outline" onClick={() => addBoard(board.layoutId)}>
-                Add
-              </Button>
-            </div>
-          ))}
+          <ItemGroup className="gap-2">
+            {addable.map((board) => (
+              <Item key={board.layoutId} role="listitem" variant="outline" className="px-3 py-2">
+                <ItemContent className="min-w-0">
+                  <ItemTitle>{board.name}</ItemTitle>
+                </ItemContent>
+                <ItemActions>
+                  <Button size="sm" variant="outline" onClick={() => addBoard(board.layoutId)}>
+                    Add
+                  </Button>
+                </ItemActions>
+              </Item>
+            ))}
+          </ItemGroup>
         </section>
       )}
     </div>
@@ -101,17 +116,19 @@ function BoardCard({ board, active, onActivate, onRemove, onAngle, onHoldSets }:
   const subtitle = [hasAngleChoice(board) ? `${angle}°` : null, holdSummary].filter(Boolean).join(' · ')
 
   return (
-    <Card className={cn('py-3', active && 'border-primary/60 bg-primary/5')}>
-      <CardContent className="flex items-center gap-2 px-3">
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
-            <span className="truncate font-medium">{board.name}</span>
-            {active && (
-              <Badge className="shrink-0 bg-accent text-accent-foreground">Active</Badge>
-            )}
-          </div>
-          <p className="truncate text-xs text-muted-foreground">{subtitle}</p>
-        </div>
+    <Item
+      role="listitem"
+      variant="outline"
+      className={cn('gap-2 px-3 py-3', active && 'border-primary/60 bg-primary/5')}
+    >
+      <ItemContent className="min-w-0 gap-0.5">
+        <ItemTitle className="w-full gap-2">
+          <span className="truncate font-medium">{board.name}</span>
+          {active && <Badge className="shrink-0 bg-accent text-accent-foreground">Active</Badge>}
+        </ItemTitle>
+        <ItemDescription className="truncate text-xs">{subtitle}</ItemDescription>
+      </ItemContent>
+      <ItemActions className="gap-2">
         {!active && (
           <Button size="sm" variant="outline" onClick={onActivate}>
             Browse
@@ -124,8 +141,8 @@ function BoardCard({ board, active, onActivate, onRemove, onAngle, onHoldSets }:
           onHoldSets={onHoldSets}
           onRemove={onRemove}
         />
-      </CardContent>
-    </Card>
+      </ItemActions>
+    </Item>
   )
 }
 

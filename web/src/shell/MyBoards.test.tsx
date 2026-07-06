@@ -10,8 +10,8 @@ beforeEach(() => {
 
 /** Add a board by name from the "Add a board" list. */
 function addBoard(name: string) {
-  const addRow = screen.getByText(name).closest('div')!
-  fireEvent.click(within(addRow).getByRole('button', { name: 'Add' }))
+  const addRow = screen.getByText(name).closest('[data-slot="item"]')!
+  fireEvent.click(within(addRow as HTMLElement).getByRole('button', { name: 'Add' }))
 }
 
 /** Open a board's config drawer. */

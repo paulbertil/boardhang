@@ -7,7 +7,7 @@
 
 import { useEffect, useState } from 'react'
 import { Maximize, Menu, X } from 'lucide-react'
-import { Card, CardContent } from '@/components/ui/card'
+import { Item, ItemActions, ItemContent, ItemDescription, ItemTitle } from '@/components/ui/item'
 import { Button } from '@/components/ui/button'
 import {
   FULLSCREEN_TIP_DISMISSED_KEY,
@@ -46,19 +46,24 @@ export function FullscreenTipBanner() {
   }
 
   return (
-    <Card role="region" aria-label="Go full screen" className="shrink-0 border-primary/30">
-      <CardContent className="flex items-start gap-3 text-sm">
-        <div className="min-w-0 flex-1 space-y-1">
-          <p className="font-medium">Hide the browser bars</p>
-          <p className="text-muted-foreground">
-            In Bluefy, tap the <Menu aria-hidden className="inline size-4 align-text-bottom" /> menu,
-            then{' '}
-            <span className="whitespace-nowrap">
-              <Maximize aria-hidden className="inline size-4 align-text-bottom" /> Enter fullscreen
-            </span>{' '}
-            for a distraction-free view of the wall.
-          </p>
-        </div>
+    <Item
+      variant="outline"
+      role="region"
+      aria-label="Go full screen"
+      className="shrink-0 items-start gap-3 border-primary/30 p-4"
+    >
+      <ItemContent className="min-w-0 gap-1">
+        <ItemTitle className="font-medium">Hide the browser bars</ItemTitle>
+        <ItemDescription className="line-clamp-none">
+          In Bluefy, tap the <Menu aria-hidden className="inline size-4 align-text-bottom" /> menu,
+          then{' '}
+          <span className="whitespace-nowrap">
+            <Maximize aria-hidden className="inline size-4 align-text-bottom" /> Enter fullscreen
+          </span>{' '}
+          for a distraction-free view of the wall.
+        </ItemDescription>
+      </ItemContent>
+      <ItemActions>
         <Button
           variant="ghost"
           size="icon-sm"
@@ -68,7 +73,7 @@ export function FullscreenTipBanner() {
         >
           <X />
         </Button>
-      </CardContent>
-    </Card>
+      </ItemActions>
+    </Item>
   )
 }

@@ -1,7 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { InstallBanner } from './InstallBanner'
-import { INSTALL_DISMISSED_KEY } from '@/lib/pwa'
+import { FULLSCREEN_TIP_DISMISSED_KEY } from '@/lib/pwa'
 
 const IPHONE_UA =
   'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148'
@@ -27,7 +27,7 @@ function stubEnv(opts: { ua: string; touch?: number; ble?: boolean; standalone?:
   )
 }
 
-const name = { name: 'Add to Home Screen' }
+const name = { name: 'Go full screen' }
 
 afterEach(() => {
   delete (navigator as { userAgent?: string }).userAgent
@@ -41,7 +41,7 @@ describe('InstallBanner', () => {
   it('shows on iOS + Bluetooth + browser tab', () => {
     stubEnv({ ua: IPHONE_UA, ble: true })
     render(<InstallBanner />)
-    expect(screen.getByRole('region', name)).toHaveTextContent(/Add to Home Screen/)
+    expect(screen.getByRole('region', name)).toHaveTextContent(/Enter fullscreen/)
   })
 
   it('is hidden once running from the Home Screen', () => {
@@ -65,13 +65,13 @@ describe('InstallBanner', () => {
   it('dismisses and remembers the choice', () => {
     stubEnv({ ua: IPHONE_UA, ble: true })
     render(<InstallBanner />)
-    fireEvent.click(screen.getByRole('button', { name: 'Dismiss Add to Home Screen banner' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Dismiss full-screen tip' }))
     expect(screen.queryByRole('region', name)).toBeNull()
-    expect(localStorage.getItem(INSTALL_DISMISSED_KEY)).toBe('1')
+    expect(localStorage.getItem(FULLSCREEN_TIP_DISMISSED_KEY)).toBe('1')
   })
 
   it('stays dismissed on a later mount', () => {
-    localStorage.setItem(INSTALL_DISMISSED_KEY, '1')
+    localStorage.setItem(FULLSCREEN_TIP_DISMISSED_KEY, '1')
     stubEnv({ ua: IPHONE_UA, ble: true })
     render(<InstallBanner />)
     expect(screen.queryByRole('region', name)).toBeNull()

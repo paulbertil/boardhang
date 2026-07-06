@@ -158,9 +158,10 @@ re-fills defaults on read. `sortSecondary` is deliberately *not* in the URL (fix
   links and the OAuth return survive a hard load. `AppLayout` also mounts two iOS-only, environment-
   gated shell banners (`web/src/shell/{BleBrowserBanner,InstallBanner}.tsx`), driven by the detection
   helpers in `web/src/lib/pwa.ts`: on iOS **without** Web Bluetooth (Safari) a non-dismissable notice
-  points the user at **Bluefy**; on iOS **with** Web Bluetooth but not yet installed, a dismissable
-  (localStorage-remembered) "Add to Home Screen" nudge. Both suppress once `isStandalone()`, and their
-  show-conditions are mutually exclusive (they split on `hasWebBluetooth()`).
+  points the user at **Bluefy**; on iOS **with** Web Bluetooth, a dismissable (localStorage-remembered)
+  tip to hide the browser bars via Bluefy's **☰ → Enter fullscreen** (Bluefy has no "Add to Home
+  Screen"; that's Safari-only and would lose Web Bluetooth). Both suppress once `isStandalone()`, and
+  their show-conditions are mutually exclusive (they split on `hasWebBluetooth()`).
 - **Deferred**: scroll restoration (accepts jump-to-top on Back for now); the `holds` param is
   reserved but its picker UI is not built yet.
 

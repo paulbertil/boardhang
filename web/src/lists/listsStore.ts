@@ -118,10 +118,11 @@ export async function loadLists(): Promise<void> {
   }
 }
 
-/** Explicit refresh (pull-to-refresh / post-write): pull, then repaint from cache. */
-export async function refreshLists(): Promise<void> {
+/** Explicit refresh (pull-to-refresh / post-write): pull, then repaint from cache.
+ *  Returns whether the pull reached the server, for callers that show a degraded flag. */
+export async function refreshLists(): Promise<{ synced: boolean }> {
   const userId = await currentUserId()
-  if (!userId) return
+  if (!userId) return { synced: false }
   const { synced } = await syncLists(userId)
   const fresh = await readLists().catch(() => state.lists)
   if (!synced && fresh.length === 0) {
@@ -129,6 +130,7 @@ export async function refreshLists(): Promise<void> {
   } else {
     setState({ status: 'loaded', lists: sortNewestFirst(fresh), error: null })
   }
+  return { synced }
 }
 
 // ─── List CRUD (optimistic, write-through, rollback on error) ─────────────────

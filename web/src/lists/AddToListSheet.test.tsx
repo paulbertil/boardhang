@@ -193,10 +193,14 @@ describe('AddToListSheet', () => {
     expect(await screen.findByRole('button', { name: 'Save' })).toBeDisabled()
   })
 
-  it('shows the empty state when there are no lists for this board', async () => {
-    lists = [savedList('l5', 'Fives', 5)]
+  it('with no lists, the create form is the empty state — no dashed box or "pick a list" hint', async () => {
+    lists = [savedList('l5', 'Fives', 5)] // different board → this board has none
     mount()
+    // The create form heads itself with the first-list prompt...
     expect(await screen.findByText('Create your first list')).toBeInTheDocument()
+    expect(screen.getByRole('textbox', { name: 'New list name' })).toBeInTheDocument()
+    // ...and the "pick a list" description is dropped so nothing double-stacks.
+    expect(screen.queryByText(/Pick a list/)).toBeNull()
   })
 
   it('rapid membership notifies apply the latest read, not a stale one (#3)', async () => {

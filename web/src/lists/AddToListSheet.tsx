@@ -32,7 +32,7 @@ import {
   useSavedLists,
 } from './listsStore'
 import { listIdsContaining } from './listsSync'
-import { boardShortLabel, trimListName } from './listsTypes'
+import { trimListName } from './listsTypes'
 
 /** Common list names offered as quick-fill pills under the new-list input. */
 const NAME_SUGGESTIONS = ['Projects', 'Warmups', 'Ticklist', 'To try'] as const
@@ -164,19 +164,19 @@ export function AddToListSheet({ open, onOpenChange, sourceCatalogId, board }: A
       <DrawerContent>
         <DrawerHeader className="pb-2">
           <DrawerTitle>Save to list</DrawerTitle>
-          <DrawerDescription>Pick a list to add this problem to.</DrawerDescription>
+          {/* Only meaningful when there ARE lists to pick — with none, the create form
+              below is the whole story, so we drop the description and let its heading
+              ("Create your first list") stand alone. */}
+          {boardLists.length > 0 && (
+            <DrawerDescription>Pick a list to add this problem to.</DrawerDescription>
+          )}
         </DrawerHeader>
 
-        <div className="max-h-[60vh] space-y-1 overflow-y-auto px-3 pb-2">
-          {boardLists.length === 0 ? (
-            <div className="rounded-lg border border-dashed border-border p-6 text-center">
-              <h2 className="text-sm font-semibold">Create your first list</h2>
-              <p className="mx-auto mt-1 max-w-xs text-sm text-muted-foreground">
-                Lists are bound to {boardShortLabel(board.name)}.
-              </p>
-            </div>
-          ) : (
-            boardLists.map((list) => {
+        {/* The membership list — omitted entirely when this board has no lists yet, so the
+            create form isn't double-stacked under an empty-state placeholder. */}
+        {boardLists.length > 0 && (
+          <div className="max-h-[60vh] space-y-1 overflow-y-auto px-3 pb-2">
+            {boardLists.map((list) => {
               const isMember = members.has(list.id)
               const isPending = pendingIds.has(list.id)
               return (
@@ -220,9 +220,9 @@ export function AddToListSheet({ open, onOpenChange, sourceCatalogId, board }: A
                   </Link>
                 </div>
               )
-            })
-          )}
-        </div>
+            })}
+          </div>
+        )}
 
         {/* New list — inline name → create + add the current problem. */}
         <form
@@ -232,9 +232,12 @@ export function AddToListSheet({ open, onOpenChange, sourceCatalogId, board }: A
             void handleCreate()
           }}
         >
-          {/* Clarifies this section creates a NEW list, distinct from toggling the
-              existing ones above. */}
-          <span className="text-xs font-medium text-muted-foreground">Or save to a new list</span>
+          {/* With no lists yet this form IS the empty state, so it owns the "create your
+              first list" heading; once lists exist it's the secondary "or make a new one"
+              path below them. */}
+          <span className="text-xs font-medium text-muted-foreground">
+            {boardLists.length === 0 ? 'Create your first list' : 'Or save to a new list'}
+          </span>
           <div className="flex gap-2">
             <Input
               value={newName}

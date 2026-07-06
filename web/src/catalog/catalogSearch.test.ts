@@ -16,7 +16,7 @@ import {
 function stripDefaults(s: Record<string, unknown>): Record<string, unknown> {
   const out: Record<string, unknown> = {}
   for (const [k, v] of Object.entries(s)) {
-    if (v !== (CATALOG_SEARCH_DEFAULTS as Record<string, unknown>)[k]) out[k] = v
+    if (v !== (CATALOG_SEARCH_DEFAULTS as unknown as Record<string, unknown>)[k]) out[k] = v
   }
   return out
 }

@@ -2,11 +2,15 @@
 // the catalog top bar). Controlled: the parent owns FilterState and passes the
 // slab's grade span + available methods. Built on shadcn Select/Slider/Toggle.
 //
-// The drawn holds-filter picker (tap positions on the board) is intentionally
-// deferred — applyFilters supports the predicate, but its UI lands with the
-// detail/board interaction work.
+// The "Holds" row opens HoldFilterPicker — a full-board picker that writes the
+// tapped positions into state.holdsFilter (applyFilters matches problems that
+// use all selected holds).
 
+import { useState } from 'react'
+import { ChevronRight } from 'lucide-react'
+import type { CatalogBoardDef } from '../board/boards'
 import { FONT_GRADES } from '../board/grades'
+import { HoldFilterPicker } from './HoldFilterPicker'
 import {
   SORT_LABELS,
   hasActiveFilters,
@@ -39,6 +43,8 @@ const RATING_LABELS: Record<string, string> = {
 interface FilterControlsProps {
   state: FilterState
   onChange: (state: FilterState) => void
+  /** The active board — supplies geometry + hold-set membership for the picker. */
+  board: CatalogBoardDef
   /** The slab's actual grade span as ordinal [min, max]. */
   gradeSpan: [number, number]
   /** Distinct method labels present in the slab. */
@@ -54,8 +60,9 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   )
 }
 
-export function FilterControls({ state, onChange, gradeSpan, methods }: FilterControlsProps) {
+export function FilterControls({ state, onChange, board, gradeSpan, methods }: FilterControlsProps) {
   const set = (patch: Partial<FilterState>) => onChange({ ...state, ...patch })
+  const [holdPickerOpen, setHoldPickerOpen] = useState(false)
   const range = state.gradeRange ?? gradeSpan
   const secondaryOptions = SORT_KEYS.filter(
     (k) => sortDimension(k) !== sortDimension(state.sortPrimary),
@@ -120,6 +127,19 @@ export function FilterControls({ state, onChange, gradeSpan, methods }: FilterCo
         />
       </Field>
 
+      <Field label="Holds">
+        <button
+          type="button"
+          onClick={() => setHoldPickerOpen(true)}
+          className="flex w-full items-center justify-between rounded-md border border-input bg-transparent px-3 py-2 text-sm transition hover:bg-accent"
+        >
+          <span className={state.holdsFilter.length === 0 ? 'text-muted-foreground' : ''}>
+            {state.holdsFilter.length === 0 ? 'Any' : `${state.holdsFilter.length} selected`}
+          </span>
+          <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
+        </button>
+      </Field>
+
       <div className="flex flex-wrap items-center gap-2">
         <Toggle variant="outline" size="sm" pressed={state.benchmarkOnly} onPressedChange={(v) => set({ benchmarkOnly: v })}>
           Benchmarks
@@ -166,6 +186,14 @@ export function FilterControls({ state, onChange, gradeSpan, methods }: FilterCo
           Reset filters
         </Button>
       )}
+
+      <HoldFilterPicker
+        board={board}
+        open={holdPickerOpen}
+        onOpenChange={setHoldPickerOpen}
+        value={state.holdsFilter}
+        onChange={(holdsFilter) => set({ holdsFilter })}
+      />
     </div>
   )
 }

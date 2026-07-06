@@ -36,6 +36,8 @@ interface CatalogListProps {
   /** A search query is narrowing the list — hides "Recently viewed" and points
       the empty state at the search ✕ (not the filters, which search bypasses). */
   searchActive?: boolean
+  /** "col-row" positions from the active holds filter to ring on thumbnails. */
+  highlightHolds?: Set<string>
   onSelect?: (problem: CatalogProblem) => void
 }
 
@@ -48,6 +50,7 @@ export function CatalogList({
   favoriteIds = new Set(),
   transform,
   searchActive = false,
+  highlightHolds,
   onSelect,
 }: CatalogListProps) {
   const showThumbnails = useShowPreviews()
@@ -161,6 +164,7 @@ export function CatalogList({
           board={board}
           isFavorite={favoriteIds.has(p.source_catalog_id)}
           showThumbnail={showThumbnails}
+          highlightHolds={highlightHolds}
           onSelect={onSelectProblem}
         />
       ))}

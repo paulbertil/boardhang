@@ -30,6 +30,8 @@ interface ProblemDetailProps {
   board: CatalogBoardDef
   angle: number
   favoriteIds: Set<string>
+  /** "col-row" positions from the active holds filter to ring on the board. */
+  highlightHolds?: Set<string>
   onClose: () => void
 }
 
@@ -43,6 +45,7 @@ export function ProblemDetail({
   board,
   angle,
   favoriteIds,
+  highlightHolds,
   onClose,
 }: ProblemDetailProps) {
   const [current, setCurrent] = useState<CatalogProblem | undefined>(() => problems[initialIndex])
@@ -297,7 +300,7 @@ export function ProblemDetail({
         onPointerDown={onSwipeStart}
         onPointerUp={onSwipeEnd}
       >
-        <CatalogBoard board={board} holds={current.holds} visibleHoldSetIds={visible} showBeta />
+        <CatalogBoard board={board} holds={current.holds} visibleHoldSetIds={visible} showBeta highlightHolds={highlightHolds} />
       </div>
 
       <div className="space-y-1">

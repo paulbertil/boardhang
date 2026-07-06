@@ -88,6 +88,29 @@ describe('URL is the source of truth', () => {
   })
 })
 
+describe('search field <-> URL sync', () => {
+  it('does not strand a half-typed query when switching boards mid-debounce', async () => {
+    addBoard(7)
+    renderWithRouter('/board/7/catalog')
+    await screen.findByText('Alpha')
+
+    // Type without waiting for the 250ms debounce to write ?q.
+    const field = screen.getByRole('textbox', { name: 'Search problems' })
+    fireEvent.change(field, { target: { value: 'carafes' } })
+    expect(field).toHaveValue('carafes')
+
+    // Leave the catalog before the debounce fires, then come back. AppLayout is the
+    // persistent root, so its field state survives — it must resync to the URL (empty
+    // ?q) rather than showing a query the list isn't actually filtered by.
+    fireEvent.click(screen.getByRole('button', { name: 'Boards' }))
+    await screen.findByRole('button', { name: 'Search' })
+    fireEvent.click(screen.getByRole('button', { name: 'Search' }))
+
+    const back = await screen.findByRole('textbox', { name: 'Search problems' })
+    expect(back).toHaveValue('')
+  })
+})
+
 describe('drawer history semantics', () => {
   it('Back closes a push-opened drawer without exiting the catalog', async () => {
     addBoard(7)

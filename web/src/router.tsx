@@ -27,34 +27,10 @@ import { AppLayout } from './shell/AppLayout'
 import { MyBoards } from './shell/MyBoards'
 import { LogbookScreen } from './logbook/LogbookScreen'
 import { CatalogScreen } from './catalog/CatalogScreen'
-import { boardByLayoutId, defaultAngle, type CatalogBoardDef } from './board/boards'
-import { getActiveBoardId, getAddedBoardIds, getAngle } from './board/boardStore'
-import { loadSeed } from './catalog/filterSeed'
-import {
-  CATALOG_SEARCH_DEFAULTS,
-  filtersToSearch,
-  validateCatalogSearch,
-} from './catalog/catalogSearch'
-
-// A fully-populated search satisfies TanStack's all-required validated type; the
-// route's strip middleware removes anything left at its default, so the URL stays clean.
-
-/** A navigation target for a board's catalog, seeded from its cold-launch filters
- *  and persisted angle. Shared by the bare-`/` redirect and the nav Search button
- *  so both reproduce the last-active catalog identically. Default params are left
- *  in — the route's strip middleware removes them, keeping the URL clean. */
-export function catalogNavTarget(board: CatalogBoardDef) {
-  const angle = getAngle(board)
-  return {
-    to: '/board/$layoutId/catalog' as const,
-    params: { layoutId: String(board.layoutId) },
-    search: {
-      ...CATALOG_SEARCH_DEFAULTS,
-      ...filtersToSearch(loadSeed(board.layoutId, angle)),
-      angle: angle === defaultAngle(board) ? 0 : angle,
-    },
-  }
-}
+import { boardByLayoutId } from './board/boards'
+import { getActiveBoardId, getAddedBoardIds } from './board/boardStore'
+import { catalogNavTarget } from './catalog/catalogNav'
+import { CATALOG_SEARCH_DEFAULTS, validateCatalogSearch } from './catalog/catalogSearch'
 
 function BoardsRoute() {
   const navigate = useNavigate()

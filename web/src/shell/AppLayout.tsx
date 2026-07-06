@@ -14,7 +14,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { useMatchRoute, useNavigate, useSearch } from '@tanstack/react-router'
 import { AccountMenu } from '../auth/AccountMenu'
 import { useBoardStore } from '../board/boardStore'
-import { catalogNavTarget } from '../router'
+import { catalogNavTarget } from '../catalog/catalogNav'
 import { Navigation, type NavView } from './Navigation'
 import { CATALOG_SEARCH_DEFAULTS, type CatalogSearch } from '../catalog/catalogSearch'
 
@@ -52,19 +52,24 @@ export function AppLayout({ children }: { children: ReactNode }) {
   // when the URL's q differs from this — i.e. it changed via Back / deep-link /
   // board-switch, not via our own debounced write mid-typing.
   const lastPushed = useRef(urlQuery)
+  const lastLayoutId = useRef(layoutId)
 
+  // Resync the field to the URL whenever the URL's q changes out from under us
+  // (Back / forward / deep-link), and always on a board switch — AppLayout is the
+  // persistent root, so its `field` survives navigation and would otherwise strand a
+  // half-typed query on the new board. In both cases drop any pending debounced
+  // write, which is now stale (its target board/URL no longer applies); the
+  // board-switch case is force-snapped even when q is unchanged (both '') so a typed
+  // query left over from the old board can't linger unapplied.
   useEffect(() => {
-    if (urlQuery !== lastPushed.current) {
+    const boardChanged = lastLayoutId.current !== layoutId
+    lastLayoutId.current = layoutId
+    if (boardChanged || urlQuery !== lastPushed.current) {
+      clearTimeout(debounceRef.current)
       setField(urlQuery)
       lastPushed.current = urlQuery
     }
-  }, [urlQuery])
-
-  // Board switch (or leaving the catalog): drop any pending write so a stale query
-  // can't land on the new board.
-  useEffect(() => {
-    clearTimeout(debounceRef.current)
-  }, [layoutId])
+  }, [urlQuery, layoutId])
 
   const writeQuery = (next: string, replace: boolean) => {
     if (layoutId === null) return

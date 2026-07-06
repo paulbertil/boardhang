@@ -29,6 +29,8 @@ interface CatalogListProps {
   loading: boolean
   degraded: boolean
   favoriteIds?: Set<string>
+  /** Catalog ids the user has a logged send for — drives the green sent check. */
+  sentIds?: Set<string>
   /** Filter/sort the slab's problems (U9). Defaults to grade-ordinal sort. */
   transform?: (problems: CatalogProblem[]) => CatalogProblem[]
   /** A search query is narrowing the list — points the empty state at the search
@@ -46,6 +48,7 @@ export function CatalogList({
   loading,
   degraded,
   favoriteIds = new Set(),
+  sentIds = new Set(),
   transform,
   searchActive = false,
   highlightHolds,
@@ -143,6 +146,7 @@ export function CatalogList({
           problem={p}
           board={board}
           isFavorite={favoriteIds.has(p.source_catalog_id)}
+          isSent={sentIds.has(p.source_catalog_id)}
           showThumbnail={showThumbnails}
           highlightHolds={highlightHolds}
           onSelect={onSelectProblem}

@@ -3,7 +3,7 @@
 // optional board thumbnail. Mirrors iOS CatalogListView's row. Clickable — opens
 // the detail pager (U11).
 
-import { BadgeCheck, Heart, Repeat, Star } from 'lucide-react'
+import { BadgeCheck, CheckCircle2, Heart, Repeat, Star } from 'lucide-react'
 import type { CatalogBoardDef } from '../board/boards'
 import { CatalogBoard } from '../board/CatalogBoard'
 import type { CatalogProblem } from './catalogSync'
@@ -12,6 +12,8 @@ interface CatalogRowProps {
   problem: CatalogProblem
   board: CatalogBoardDef
   isFavorite?: boolean
+  /** The user has a logged send for this problem — shows the green sent check (iOS parity). */
+  isSent?: boolean
   /** Show the board thumbnail (iOS "climb previews" toggle). */
   showThumbnail?: boolean
   /** "col-row" positions from the active holds filter to ring on the thumbnail. */
@@ -23,6 +25,7 @@ export function CatalogRow({
   problem,
   board,
   isFavorite = false,
+  isSent = false,
   showThumbnail = false,
   highlightHolds,
   onSelect,
@@ -46,6 +49,9 @@ export function CatalogRow({
           </span>
           {problem.is_benchmark && (
             <BadgeCheck role="img" aria-label="Benchmark" className="size-4 shrink-0 text-benchmark" />
+          )}
+          {isSent && (
+            <CheckCircle2 role="img" aria-label="Sent" className="size-4 shrink-0 text-success" />
           )}
           {isFavorite && (
             <Heart role="img" aria-label="Favorite" className="size-3.5 shrink-0 fill-favorite text-favorite" />

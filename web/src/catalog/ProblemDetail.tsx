@@ -34,6 +34,8 @@ interface ProblemDetailProps {
   board: CatalogBoardDef
   angle: number
   favoriteIds: Set<string>
+  /** The user has a logged send for this problem — shows the green sent check (iOS parity). */
+  isSent?: boolean
   /** "col-row" positions from the active holds filter to ring on the board. */
   highlightHolds?: Set<string>
   /** Page to another problem (replace-navigates ?problem). */
@@ -50,6 +52,7 @@ export function ProblemDetail({
   board,
   angle,
   favoriteIds,
+  isSent = false,
   highlightHolds,
   onNavigate,
 }: ProblemDetailProps) {
@@ -250,6 +253,9 @@ export function ProblemDetail({
             </span>
             {current.is_benchmark && (
               <BadgeCheck className="size-3.5 shrink-0 text-benchmark" aria-label="Benchmark" />
+            )}
+            {isSent && (
+              <CheckCircle2 className="size-3.5 shrink-0 text-success" aria-label="Sent" />
             )}
           </div>
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">

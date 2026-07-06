@@ -59,6 +59,13 @@ describe('CatalogRow', () => {
     expect(screen.getByLabelText('Favorite')).toBeInTheDocument()
   })
 
+  it('shows the sent check only when isSent', () => {
+    const { rerender } = render(<CatalogRow problem={problem()} board={board} />)
+    expect(screen.queryByLabelText('Sent')).toBeNull()
+    rerender(<CatalogRow problem={problem()} board={board} isSent />)
+    expect(screen.getByLabelText('Sent')).toBeInTheDocument()
+  })
+
   it('renders the board thumbnail only when enabled', () => {
     const { rerender, container } = render(<CatalogRow problem={problem()} board={board} />)
     expect(container.querySelector('.catalog-board')).toBeNull()

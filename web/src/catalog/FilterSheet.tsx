@@ -7,14 +7,9 @@
 import { SlidersHorizontal } from 'lucide-react'
 import type { CatalogBoardDef } from '../board/boards'
 import { FilterControls } from './FilterControls'
+import { FabTrigger } from './FabTrigger'
 import { activeFilterCount, type FilterState } from './filters'
-import {
-  Drawer,
-  DrawerContent,
-  DrawerHeader,
-  DrawerTitle,
-  DrawerTrigger,
-} from '@/components/ui/drawer'
+import { Drawer, DrawerContent, DrawerHeader, DrawerTitle } from '@/components/ui/drawer'
 
 interface FilterSheetProps {
   state: FilterState
@@ -29,17 +24,14 @@ export function FilterSheet({ state, onChange, board, gradeSpan, methods }: Filt
   return (
     <Drawer showSwipeHandle>
       {/* Positioned by the parent's shared FAB column (CatalogScreen). */}
-      <DrawerTrigger
-        aria-label="Filters"
-        className="pointer-events-auto relative flex size-14 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg transition hover:opacity-90"
-      >
+      <FabTrigger aria-label="Filters">
         <SlidersHorizontal className="size-6" />
         {count > 0 && (
           <span className="absolute -top-0.5 -right-0.5 flex size-5 items-center justify-center rounded-full bg-destructive text-[0.7rem] font-semibold text-white">
             {count}
           </span>
         )}
-      </DrawerTrigger>
+      </FabTrigger>
       <DrawerContent>
         <DrawerHeader>
           <DrawerTitle>Filters</DrawerTitle>

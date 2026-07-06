@@ -11,13 +11,8 @@ import { CatalogRow } from './CatalogRow'
 import type { CatalogProblem } from './catalogSync'
 import { clearRecents, useRecents } from './recentsStore'
 import { useShowPreviews } from './previewsStore'
-import {
-  Drawer,
-  DrawerContent,
-  DrawerHeader,
-  DrawerTitle,
-  DrawerTrigger,
-} from '@/components/ui/drawer'
+import { FabTrigger } from './FabTrigger'
+import { Drawer, DrawerContent, DrawerHeader, DrawerTitle } from '@/components/ui/drawer'
 import { Button } from '@/components/ui/button'
 
 interface RecentsSheetProps {
@@ -49,12 +44,9 @@ export function RecentsSheet({ board, angle, problems, favoriteIds, onSelect }: 
   return (
     <Drawer open={open} onOpenChange={setOpen} showSwipeHandle>
       {/* Positioned by the parent's shared FAB column (CatalogScreen). */}
-      <DrawerTrigger
-        aria-label="Recently viewed"
-        className="pointer-events-auto relative flex size-14 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg transition hover:opacity-90"
-      >
+      <FabTrigger aria-label="Recently viewed">
         <History className="size-6" />
-      </DrawerTrigger>
+      </FabTrigger>
       <DrawerContent>
         <DrawerHeader className="flex flex-row items-center justify-between">
           <DrawerTitle>Recently viewed</DrawerTitle>

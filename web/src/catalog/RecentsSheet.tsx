@@ -21,7 +21,8 @@ interface RecentsSheetProps {
   /** The full (unfiltered) slab — recents are resolved against it, filter-independent. */
   problems: CatalogProblem[]
   favoriteIds: Set<string>
-  onSelect: (problem: CatalogProblem) => void
+  /** Open the tapped recent, paging over the recents stack (this snapshot) at `index`. */
+  onSelect: (stack: CatalogProblem[], index: number) => void
 }
 
 export function RecentsSheet({ board, angle, problems, favoriteIds, onSelect }: RecentsSheetProps) {
@@ -46,7 +47,7 @@ export function RecentsSheet({ board, angle, problems, favoriteIds, onSelect }: 
       {/* Positioned by the parent's shared FAB column (CatalogScreen). */}
       {recentProblems.length > 0 && (
         <FabTrigger aria-label="Recently viewed">
-          <History className="size-6" />
+          <History className="size-6" strokeWidth={1.5} />
         </FabTrigger>
       )}
       <DrawerContent>
@@ -64,16 +65,17 @@ export function RecentsSheet({ board, angle, problems, favoriteIds, onSelect }: 
           </Button>
         </DrawerHeader>
         <div className="max-h-[70vh] overflow-y-auto pb-[calc(2rem+env(safe-area-inset-bottom))]">
-          {recentProblems.map((p) => (
+          {recentProblems.map((p, i) => (
             <CatalogRow
               key={p.source_catalog_id}
               problem={p}
               board={board}
               isFavorite={favoriteIds.has(p.source_catalog_id)}
               showThumbnail={showThumbnails}
-              onSelect={(problem) => {
+              onSelect={() => {
+                // Page over the recents snapshot (newest→oldest) at the tapped row.
                 setOpen(false)
-                onSelect(problem)
+                onSelect(recentProblems, i)
               }}
             />
           ))}

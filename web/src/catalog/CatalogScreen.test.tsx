@@ -29,8 +29,14 @@ function problem(id: string, name: string, stars: number): CatalogProblem {
   }
 }
 
-// Full slab: 'Visible' passes a minStars filter, 'Hidden' does not.
-const SLAB = [problem('a', 'Visible', 5), problem('b', 'Hidden', 0)]
+// Full slab: 'Visible' passes a minStars filter, the two 'Hidden' problems don't.
+// Slab order (a, b, c) is deliberately different from the recents order so a test
+// that pages the recents stack can't be satisfied by slab-order neighbors.
+const SLAB = [
+  problem('a', 'Visible', 5),
+  problem('b', 'HiddenB', 0),
+  problem('c', 'HiddenC', 0),
+]
 
 // Feed CatalogScreen a fixed slab instead of the async cache/sync layer.
 vi.mock('./useSlab', () => ({
@@ -57,27 +63,38 @@ beforeEach(() => {
   )
 })
 
-describe('CatalogScreen — recents open regardless of filters', () => {
-  it('opens a recent that is filtered out of the displayed list, over the full slab', () => {
-    // 'Hidden' was viewed but is excluded by the active minStars filter.
+describe('CatalogScreen — recents open as their own stack', () => {
+  it('opens a filtered-out recent and pages within the recents stack, not the slab', () => {
+    // Both hidden by the minStars filter; recents order becomes [C, B] (newest first).
     recordRecent(LAYOUT, ANGLE, 'b')
+    recordRecent(LAYOUT, ANGLE, 'c')
     render(
       <AuthProvider>
         <CatalogScreen />
       </AuthProvider>,
     )
 
-    // Precondition: the filter hides 'Hidden' from the main list.
+    // Precondition: the filter hides both recents from the main list.
     expect(screen.getByText('Visible')).toBeInTheDocument()
-    expect(screen.queryByText('Hidden')).toBeNull()
+    expect(screen.queryByText('HiddenB')).toBeNull()
+    expect(screen.queryByText('HiddenC')).toBeNull()
 
-    // Open the recents sheet and tap the filtered-out recent.
+    // Open the sheet and tap the newest recent (C), which is filtered out.
     fireEvent.click(screen.getByRole('button', { name: /recently viewed/i }))
-    fireEvent.click(screen.getByText('Hidden'))
+    fireEvent.click(screen.getByText('HiddenC'))
 
-    // The detail pager opened on 'Hidden' — its nav controls are detail-only,
-    // proving the recent opened despite being filtered out of `displayed`.
-    expect(screen.getByText('Hidden')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /next problem/i })).toBeInTheDocument()
+    // Detail opens on C. C is first in the recents stack, so Previous is disabled
+    // and Next is enabled — unlike slab paging, where C (last slab entry) would
+    // have Next disabled and Previous -> the non-recent 'HiddenB'/'Visible'.
+    expect(screen.getByText('HiddenC')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /previous problem/i })).toBeDisabled()
+    const next = screen.getByRole('button', { name: /next problem/i })
+    expect(next).toBeEnabled()
+
+    // Next steps to the other recent (B), proving the pager traverses the recents
+    // stack (newest->oldest), never the in-between slab entries.
+    fireEvent.click(next)
+    expect(screen.getByText('HiddenB')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /next problem/i })).toBeDisabled()
   })
 })

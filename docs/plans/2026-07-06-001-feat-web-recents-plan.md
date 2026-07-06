@@ -50,8 +50,16 @@ Recents are meant to be filter-independent.
   via swipe/overlay like the app's other Drawers (no "Done" button).
 - **R5** — Sheet rows respect the global climb-previews toggle (`useShowPreviews()`).
 - **R6** — Tapping a recent row opens that problem's detail **regardless of active filters**
-  (fixes the latent bail-out bug), and the detail pager pages over the **full unfiltered
-  slab** `problems`, not the filtered `displayed` list.
+  (fixes the latent bail-out bug). See **R7** for what the pager pages over.
+- **R7** *(added 2026-07-06, revises the original R6)* — Opening a recent pages through the
+  **recents stack only** (the recent problems, newest→oldest, as shown in the sheet), **not**
+  the full slab and not the filtered list. Example: recents `[A, C, E]` → swiping stays within
+  `A → C → E`, never surfacing `B`/`D`. The pager array is a **snapshot** captured at tap time
+  (before the tap's own view-recording fires), so it does not reshuffle mid-swipe. Views are
+  still recorded for each shown problem (so the next open reflects what was browsed). This
+  **diverges from iOS**, which pages a recent over the full `catalog.problems` — treated here
+  as a bug on both platforms. List taps (from the main catalog list) are unchanged: they page
+  over the filtered `displayed` list.
 
 ---
 
@@ -65,9 +73,18 @@ Recents are meant to be filter-independent.
   `sticky ... mt-auto` siblings fight over the same slot and overlap.
 - **KTD2 — Detail Drawer takes an explicit source list, not just an index.** `CatalogScreen`
   replaces `openIndex: number | null` with a single open-target holding the array to page
-  over **and** the initial index. List taps pass `displayed`; recent taps pass the full
-  `problems` slab. This is what makes R6 work: the recent is always found in the full slab, so
-  the open never bails, and paging neighbors are the full catalog (iOS parity).
+  over **and** the initial index. List taps pass `displayed`; recent taps pass the
+  **recents-stack snapshot** *(revised — see KTD5; originally the full `problems` slab)*. The
+  explicit-source-list design is what makes R6/R7 work: the open never bails, and paging
+  neighbors are whatever source array the caller chose.
+- **KTD5 — Recents open into their own stack, not the slab** *(added 2026-07-06)*. `RecentsSheet`
+  already resolves the recents to `recentProblems`; on a row tap it hands that array **plus the
+  tapped index** to the open-target, so the detail pager pages over the recents snapshot (R7).
+  Because `setOpenTarget` captures the array by reference at tap time, and `recordRecent` only
+  mutates the store (not that captured array), the stack stays stable while paging even though
+  each shown problem is re-recorded. Rationale: matches the user's "recently-viewed stack"
+  mental model; the alternative (full-slab paging) surfaced non-recent neighbors, the reported
+  bug.
 - **KTD3 — `RecentsSheet` mirrors `FilterSheet` and self-resolves its data.** The new
   component takes `board`, `angle`, `problems`, `favoriteIds`, and an `onSelect`, and internally
   calls `useRecents` + resolves ids against `problems` (same resolution `CatalogList` does
@@ -254,6 +271,45 @@ provided is now covered by U3's RecentsSheet tests. Verify the existing catalog-
 
 **Verification:** `web` build/`tsc` clean (no dangling imports); catalog list no longer shows a
 top recents section; the FAB path works.
+
+### U5. Recents open into their own pager stack
+
+*(Added 2026-07-06 after the initial PR — supersedes the R6 "page over the full slab" choice.)*
+
+**Goal:** Tapping a recent pages through the recents stack only, not the full slab.
+
+**Requirements:** R7 (revises R6). Realizes KTD5.
+
+**Dependencies:** U2, U3.
+
+**Files:** `web/src/catalog/RecentsSheet.tsx`, `web/src/catalog/CatalogScreen.tsx`,
+`web/src/catalog/CatalogScreen.test.tsx`
+
+**Approach:**
+- `RecentsSheet`: change `onSelect` from `(problem) => void` to `(stack, index) => void`. In the
+  row map, capture the row index and call `onSelect(recentProblems, i)` (still closing the sheet
+  first). `recentProblems` is the render-time snapshot, so the array handed over is exactly the
+  newest→oldest order shown.
+- `CatalogScreen`: `openRecent` becomes `(stack, index) => setOpenTarget({ list: stack, index })`
+  — no more `problems.findIndex`. The captured `stack` reference is the pager's source; because
+  `recordRecent` (fired inside `ProblemDetail` on each shown problem) only mutates the store and
+  not this array, the stack stays stable while paging. List taps (`openProblem` over `displayed`)
+  are untouched.
+
+**Patterns to follow:** existing `openProblem`/open-target wiring in `CatalogScreen.tsx`.
+
+**Test scenarios:**
+- Covers R7. Slab `[A(visible), B(hidden), C(hidden)]` with a `minStars` filter → `displayed=[A]`;
+  record views for B then C so recents `=[C, B]` (both filtered out). Open the sheet, tap **C**:
+  detail opens on C; **Previous problem** is disabled (C is newest/first in the stack) and
+  **Next problem** is enabled; clicking Next shows **B** — the other recent — proving the pager
+  traverses the recents stack, not the slab (slab-paging would have made C's neighbor a
+  non-recent or disabled Next).
+- The filter-independent open still holds: the tapped recent opens even though it's absent from
+  `displayed`.
+
+**Verification:** `vitest` green; manually, open a recent and confirm swiping only cycles your
+recent problems, never the in-between slab entries.
 
 ---
 

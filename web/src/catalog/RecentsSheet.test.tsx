@@ -92,12 +92,19 @@ describe('RecentsSheet', () => {
     expect(screen.queryByRole('button', { name: /recently viewed/i })).toBeNull()
   })
 
-  it('calls onSelect with the tapped problem', async () => {
-    recordRecent(7, 40, 'a')
-    const { onSelect } = renderSheet([problem('a', '6A', 'Alpha')])
+  it('calls onSelect with the recents stack and the tapped index', async () => {
+    recordRecent(7, 40, 'b')
+    recordRecent(7, 40, 'a') // recents = [a, b]
+    const { onSelect } = renderSheet([problem('a', '6A', 'Alpha'), problem('b', '6B', 'Beta')])
     fireEvent.click(screen.getByRole('button', { name: /recently viewed/i }))
-    const row = await screen.findByText('Alpha')
-    fireEvent.click(row)
-    expect(onSelect).toHaveBeenCalledWith(expect.objectContaining({ source_catalog_id: 'a' }))
+    // Tap the second row (Beta, index 1) — onSelect gets the whole stack + its index.
+    fireEvent.click(await screen.findByText('Beta'))
+    expect(onSelect).toHaveBeenCalledWith(
+      [
+        expect.objectContaining({ source_catalog_id: 'a' }),
+        expect.objectContaining({ source_catalog_id: 'b' }),
+      ],
+      1,
+    )
   })
 })

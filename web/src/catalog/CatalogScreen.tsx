@@ -67,10 +67,11 @@ export function CatalogScreen() {
     if (i >= 0) setOpenTarget({ list: displayed, index: i })
   }
 
-  // Recent taps: page over the full slab, so it opens even when filtered out.
-  const openRecent = (problem: CatalogProblem) => {
-    const i = problems.findIndex((p) => p.source_catalog_id === problem.source_catalog_id)
-    if (i >= 0) setOpenTarget({ list: problems, index: i })
+  // Recent taps: page over the recents stack itself (the snapshot RecentsSheet
+  // hands over), so swiping stays within your recents and never surfaces the
+  // in-between slab entries. Filter-independent — the stack is the resolved recents.
+  const openRecent = (stack: CatalogProblem[], index: number) => {
+    setOpenTarget({ list: stack, index })
   }
 
   return (

@@ -4,6 +4,7 @@ import type { CatalogProblem } from './catalogSync'
 import { recordRecent } from './recentsStore'
 import { addBoard } from '../board/boardStore'
 import { renderWithRouter } from '../test/renderWithRouter'
+import { useSlab } from './useSlab'
 
 // Board 7 / angle 40 is the default board+angle (board 7's only angle is 40).
 const LAYOUT = 7
@@ -43,10 +44,8 @@ const SLAB = [
   problem('c', 'HiddenC', 0, [H(4, 5)]),
 ]
 
-// Feed CatalogScreen a fixed slab instead of the async cache/sync layer.
-vi.mock('./useSlab', () => ({
-  useSlab: () => ({ problems: SLAB, loading: false, degraded: false }),
-}))
+// Feed CatalogScreen a controllable slab instead of the async cache/sync layer.
+vi.mock('./useSlab', () => ({ useSlab: vi.fn() }))
 
 // ProblemDetail (opened by tapping a recent) reaches for Web Bluetooth.
 vi.mock('../ble/useBle', () => ({
@@ -61,6 +60,7 @@ beforeEach(() => {
   localStorage.clear()
   window.dispatchEvent(new StorageEvent('storage'))
   vi.clearAllMocks()
+  vi.mocked(useSlab).mockReturnValue({ problems: SLAB, loading: false, degraded: false })
 })
 
 describe('CatalogScreen — recents open as their own stack', () => {
@@ -121,6 +121,17 @@ describe('CatalogScreen — recents open as their own stack', () => {
     expect(next).toBeEnabled()
     fireEvent.click(next)
     expect(await screen.findByRole('heading', { name: 'HiddenC' })).toBeInTheDocument()
+  })
+})
+
+describe('CatalogScreen — deep-linked problem loading', () => {
+  it('shows a loading state for a deep-linked problem while its slab is still syncing', async () => {
+    vi.mocked(useSlab).mockReturnValue({ problems: [], loading: true, degraded: false })
+    addBoard(LAYOUT)
+    renderWithRouter(`/board/${LAYOUT}/catalog?problem=782b2b3b`)
+    // The slab hasn't resolved, so the drawer opens on a spinner rather than nothing.
+    expect(await screen.findByTestId('problem-pending')).toBeInTheDocument()
+    expect(screen.getByText('Loading problem…')).toBeInTheDocument()
   })
 })
 

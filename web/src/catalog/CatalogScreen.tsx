@@ -7,6 +7,7 @@
 // climbable check).
 
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { Loader2 } from 'lucide-react'
 import { getRouteApi, useRouter } from '@tanstack/react-router'
 import { FONT_GRADES, gradeIndex } from '../board/grades'
 import { boardByLayoutId, defaultAngle } from '../board/boards'
@@ -103,7 +104,11 @@ export function CatalogScreen() {
     ? (pagerList.find((p) => p.source_catalog_id === openId) ??
       problems.find((p) => p.source_catalog_id === openId))
     : undefined
-  const drawerOpen = current !== undefined
+  // A deep link can request a problem before its slab has synced (cold cache / first
+  // open). Keep the drawer open showing a spinner rather than nothing until the slab
+  // resolves; if it loads and the id still isn't there, the drawer closes.
+  const problemPending = Boolean(openId) && !current && loading
+  const drawerOpen = current !== undefined || problemPending
 
   // Drop the recents pager source whenever the drawer closes (?problem cleared by any
   // means: Back, gesture, deep-link removal) so a later list tap or deep link never
@@ -168,8 +173,8 @@ export function CatalogScreen() {
       <Drawer open={drawerOpen} onOpenChange={(open) => !open && closeDrawer()} showSwipeHandle>
         <DrawerContent>
           <DrawerTitle className="sr-only">Problem details</DrawerTitle>
-          {current && (
-            <div className="max-h-[85vh] overflow-y-auto px-4 pt-4 pb-[calc(1.5rem+env(safe-area-inset-bottom))]">
+          <div className="max-h-[85vh] overflow-y-auto px-4 pt-4 pb-[calc(1.5rem+env(safe-area-inset-bottom))]">
+            {current ? (
               <ProblemDetail
                 problem={current}
                 displayed={pagerList}
@@ -179,8 +184,16 @@ export function CatalogScreen() {
                 highlightHolds={highlightHolds}
                 onNavigate={showProblem}
               />
-            </div>
-          )}
+            ) : problemPending ? (
+              <div
+                className="flex min-h-[40vh] flex-col items-center justify-center gap-3 text-muted-foreground"
+                data-testid="problem-pending"
+              >
+                <Loader2 className="size-6 animate-spin" />
+                <p className="text-sm">Loading problem…</p>
+              </div>
+            ) : null}
+          </div>
         </DrawerContent>
       </Drawer>
     </div>

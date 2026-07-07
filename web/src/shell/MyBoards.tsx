@@ -40,7 +40,8 @@ export function MyBoards({ onActivated }: MyBoardsProps) {
   // finger — only the Active badge / Browse button swap in place. A fresh mount
   // re-reads the MRU order (active board on top). Boards added this session
   // append; removed ones drop out — membership stays live, only order is frozen.
-  const orderRef = useRef<number[]>(addedBoards.map((b) => b.layoutId))
+  // Seeded empty; the append loop below fills it in MRU order on first render.
+  const orderRef = useRef<number[]>([])
   const byId = new Map(addedBoards.map((b) => [b.layoutId, b] as const))
   const orderedBoards: CatalogBoardDef[] = []
   for (const id of orderRef.current) {

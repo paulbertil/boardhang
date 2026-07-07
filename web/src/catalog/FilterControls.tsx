@@ -6,18 +6,21 @@
 // tapped positions into state.holdsFilter (applyFilters matches problems that
 // use all selected holds).
 
-import { useState } from 'react'
+import { useId, useState } from 'react'
 import { ChevronRight } from 'lucide-react'
 import type { CatalogBoardDef } from '../board/boards'
 import { FONT_GRADES } from '../board/grades'
 import { HoldFilterPicker } from './HoldFilterPicker'
 import {
   SORT_LABELS,
+  STATUS_KEYS,
+  STATUS_LABELS,
   hasActiveFilters,
   resetFilters,
   sortDimension,
   type FilterState,
   type SortKey,
+  type StatusKey,
 } from './filters'
 import { Button } from '@/components/ui/button'
 import {
@@ -49,6 +52,10 @@ interface FilterControlsProps {
   gradeSpan: [number, number]
   /** Distinct method labels present in the slab. */
   methods: string[]
+  /** Signed in AND ascents loaded — gates the status filter's count + Reset. */
+  statusReady: boolean
+  /** Definitively signed out — disables the status chips and shows the hint. */
+  signedOut: boolean
 }
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
@@ -60,9 +67,20 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   )
 }
 
-export function FilterControls({ state, onChange, board, gradeSpan, methods }: FilterControlsProps) {
+export function FilterControls({
+  state,
+  onChange,
+  board,
+  gradeSpan,
+  methods,
+  statusReady,
+  signedOut,
+}: FilterControlsProps) {
   const set = (patch: Partial<FilterState>) => onChange({ ...state, ...patch })
   const [holdPickerOpen, setHoldPickerOpen] = useState(false)
+  const statusHintId = useId()
+  const toggleStatus = (k: StatusKey, active: boolean) =>
+    set({ statusFilters: active ? [...state.statusFilters, k] : state.statusFilters.filter((x) => x !== k) })
   const range = state.gradeRange ?? gradeSpan
   const secondaryOptions = SORT_KEYS.filter(
     (k) => sortDimension(k) !== sortDimension(state.sortPrimary),
@@ -161,6 +179,29 @@ export function FilterControls({ state, onChange, board, gradeSpan, methods }: F
         </Select>
       </div>
 
+      <Field label="Status">
+        {signedOut && (
+          <div id={statusHintId} className="text-xs text-muted-foreground">
+            Sign in to filter by status
+          </div>
+        )}
+        <div className="flex flex-wrap gap-1.5">
+          {STATUS_KEYS.map((k) => (
+            <Toggle
+              key={k}
+              variant="outline"
+              size="sm"
+              disabled={signedOut}
+              aria-describedby={signedOut ? statusHintId : undefined}
+              pressed={state.statusFilters.includes(k)}
+              onPressedChange={(active) => toggleStatus(k, active)}
+            >
+              {STATUS_LABELS[k]}
+            </Toggle>
+          ))}
+        </div>
+      </Field>
+
       {methods.length > 0 && (
         <Field label="Method">
           <div className="flex flex-wrap gap-1.5">
@@ -181,7 +222,7 @@ export function FilterControls({ state, onChange, board, gradeSpan, methods }: F
         </Field>
       )}
 
-      {hasActiveFilters(state) && (
+      {hasActiveFilters(state, statusReady) && (
         <Button variant="ghost" size="sm" onClick={() => onChange(resetFilters(state))}>
           Reset filters
         </Button>

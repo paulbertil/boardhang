@@ -7,7 +7,7 @@ import { FilterControls } from './FilterControls'
 const gradeSpan: [number, number] = [3, 15]
 const board = boardByLayoutId(7)!
 
-function setup(over: Partial<FilterState> = {}) {
+function setup(over: Partial<FilterState> = {}, auth: { statusReady?: boolean; signedOut?: boolean } = {}) {
   const state = { ...DEFAULT_FILTERS, ...over }
   const onChange = vi.fn()
   render(
@@ -17,6 +17,8 @@ function setup(over: Partial<FilterState> = {}) {
       board={board}
       gradeSpan={gradeSpan}
       methods={['Footless', 'No kickboard']}
+      statusReady={auth.statusReady ?? true}
+      signedOut={auth.signedOut ?? false}
     />,
   )
   return { onChange }
@@ -42,5 +44,28 @@ describe('FilterControls', () => {
     const { onChange } = setup({ benchmarkOnly: true })
     fireEvent.click(screen.getByRole('button', { name: /reset filters/i }))
     expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ benchmarkOnly: false }))
+  })
+
+  it('toggles status chips (multi-select) when signed in', () => {
+    const { onChange } = setup({ statusFilters: ['sent'] })
+    // 'Sent' already pressed; add 'Not logged'.
+    fireEvent.click(screen.getByRole('button', { name: 'Not logged' }))
+    expect(onChange).toHaveBeenCalledWith(
+      expect.objectContaining({ statusFilters: ['sent', 'unlogged'] }),
+    )
+  })
+
+  it('disables status chips with a sign-in hint when signed out', () => {
+    setup({}, { signedOut: true, statusReady: false })
+    expect(screen.getByText('Sign in to filter by status')).toBeInTheDocument()
+    const sent = screen.getByRole('button', { name: 'Sent' })
+    expect(sent).toBeDisabled()
+    expect(sent).toHaveAttribute('aria-describedby')
+  })
+
+  it('does not count status toward Reset when signed out (statusReady false)', () => {
+    // A shared ?status= link decodes statusFilters while signed out; Reset must stay hidden.
+    setup({ statusFilters: ['sent'] }, { signedOut: true, statusReady: false })
+    expect(screen.queryByRole('button', { name: /reset filters/i })).toBeNull()
   })
 })

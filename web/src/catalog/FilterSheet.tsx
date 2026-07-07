@@ -17,10 +17,22 @@ interface FilterSheetProps {
   board: CatalogBoardDef
   gradeSpan: [number, number]
   methods: string[]
+  /** Signed in AND ascents loaded — gates the status filter's count + apply. */
+  statusReady: boolean
+  /** Definitively signed out — disables the status chips with a sign-in hint. */
+  signedOut: boolean
 }
 
-export function FilterSheet({ state, onChange, board, gradeSpan, methods }: FilterSheetProps) {
-  const count = activeFilterCount(state)
+export function FilterSheet({
+  state,
+  onChange,
+  board,
+  gradeSpan,
+  methods,
+  statusReady,
+  signedOut,
+}: FilterSheetProps) {
+  const count = activeFilterCount(state, statusReady)
   return (
     <Drawer showSwipeHandle>
       {/* Positioned by the parent's shared FAB column (CatalogScreen). */}
@@ -37,7 +49,15 @@ export function FilterSheet({ state, onChange, board, gradeSpan, methods }: Filt
           <DrawerTitle>Filters</DrawerTitle>
         </DrawerHeader>
         <div className="max-h-[70vh] overflow-y-auto px-4 pb-[calc(2rem+env(safe-area-inset-bottom))]">
-          <FilterControls state={state} onChange={onChange} board={board} gradeSpan={gradeSpan} methods={methods} />
+          <FilterControls
+            state={state}
+            onChange={onChange}
+            board={board}
+            gradeSpan={gradeSpan}
+            methods={methods}
+            statusReady={statusReady}
+            signedOut={signedOut}
+          />
         </div>
       </DrawerContent>
     </Drawer>

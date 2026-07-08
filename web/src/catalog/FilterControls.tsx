@@ -12,6 +12,7 @@ import type { CatalogBoardDef } from '../board/boards'
 import { FONT_GRADES } from '../board/grades'
 import { HoldFilterPicker } from './HoldFilterPicker'
 import { MemberStatusRow } from './MemberStatusRow'
+import { useSessionFilterRows } from './useSessionFilterRows'
 import {
   SORT_LABELS,
   sortDimension,
@@ -41,30 +42,11 @@ const RATING_LABELS: Record<string, string> = {
 }
 
 /** One member's row in the per-member "Ascent status" section (U5). */
-export interface MemberFilterRow {
-  userId: string
-  /** Visible label — "You" for the self row, else the member's display label/initials. */
-  label: string
-  isSelf: boolean
-  selected: StatusKey[]
-  onToggle: (k: StatusKey, active: boolean) => void
-}
-
-/** Active-session status UI, threaded from CatalogScreen. When present the "Ascent status"
- *  section renders one row per member (self first) instead of the single self row. */
-export interface SessionFilterUI {
-  rows: MemberFilterRow[]
-  /** 'loading' = projection unready (first load); 'ready' = live; 'paused' = projection
-   *  errored or dropped by max-age, so cross-member filtering is off and the list is widened. */
-  state: 'loading' | 'ready' | 'paused'
-  /** Re-fetch the projection to reapply (wired to the session bar's refresh — U7). */
-  onRefresh: () => void
-}
-
 interface FilterControlsProps {
   state: FilterState
   onChange: (state: FilterState) => void
-  /** The active board — supplies geometry + hold-set membership for the picker. */
+  /** The active board — supplies geometry + hold-set membership for the picker, and scopes
+   *  the per-member session rows (read directly via useSessionFilterRows). */
   board: CatalogBoardDef
   /** The slab's actual grade span as ordinal [min, max]. */
   gradeSpan: [number, number]
@@ -74,9 +56,6 @@ interface FilterControlsProps {
   statusReady: boolean
   /** Definitively signed out — disables the status chips and shows the hint. */
   signedOut: boolean
-  /** Active collaboration session (U5). When set, per-member status rows replace the single
-   *  self row; when absent, the single-user status row is shown (unchanged behavior). */
-  session?: SessionFilterUI
 }
 
 function Field({
@@ -104,8 +83,10 @@ export function FilterControls({
   methods,
   statusReady,
   signedOut,
-  session,
 }: FilterControlsProps) {
+  // Session rows come from the store hook directly (no prop drilling), matching how
+  // SessionBar/SessionPill read session state.
+  const session = useSessionFilterRows(board)
   const set = (patch: Partial<FilterState>) => onChange({ ...state, ...patch })
   const [holdPickerOpen, setHoldPickerOpen] = useState(false)
   const statusHintId = useId()

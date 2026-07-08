@@ -6,7 +6,8 @@
 
 import { SlidersHorizontal } from 'lucide-react'
 import type { CatalogBoardDef } from '../board/boards'
-import { FilterControls, type SessionFilterUI } from './FilterControls'
+import { FilterControls } from './FilterControls'
+import { useSessionFilterRows } from './useSessionFilterRows'
 import { FabTrigger } from './FabTrigger'
 import { activeFilterCount, hasActiveFilters, resetFilters, type FilterState } from './filters'
 import { Button } from '@/components/ui/button'
@@ -22,8 +23,6 @@ interface FilterSheetProps {
   statusReady: boolean
   /** Definitively signed out — disables the status chips with a sign-in hint. */
   signedOut: boolean
-  /** Active collaboration session — swaps the status filter to per-member rows. */
-  session?: SessionFilterUI
 }
 
 export function FilterSheet({
@@ -34,10 +33,10 @@ export function FilterSheet({
   methods,
   statusReady,
   signedOut,
-  session,
 }: FilterSheetProps) {
   // In a session the single-user statusFilters dimension is inert (self is a member row),
   // so count it only when solo; add 1 when any member row has a selection.
+  const session = useSessionFilterRows(board)
   const sessionStatusActive = session?.rows.some((r) => r.selected.length > 0) ?? false
   const count = activeFilterCount(state, session ? false : statusReady) + (sessionStatusActive ? 1 : 0)
   return (
@@ -73,7 +72,6 @@ export function FilterSheet({
               methods={methods}
               statusReady={statusReady}
               signedOut={signedOut}
-              session={session}
             />
           </div>
         </div>

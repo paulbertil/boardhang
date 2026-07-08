@@ -1,8 +1,17 @@
 import { fireEvent, render, screen, within } from '@testing-library/react'
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { boardByLayoutId } from '../board/boards'
 import { DEFAULT_FILTERS, type FilterState } from './filters'
-import { FilterControls, type SessionFilterUI } from './FilterControls'
+import { FilterControls } from './FilterControls'
+import type { SessionFilterUI } from './useSessionFilterRows'
+
+// FilterControls now reads session rows from the store hook (no prop drilling); control it here.
+const h = vi.hoisted(() => ({ session: undefined as SessionFilterUI | undefined }))
+vi.mock('./useSessionFilterRows', () => ({ useSessionFilterRows: () => h.session }))
+
+beforeEach(() => {
+  h.session = undefined
+})
 
 const gradeSpan: [number, number] = [3, 15]
 const board = boardByLayoutId(7)!
@@ -71,7 +80,7 @@ function sessionSetup(over: Partial<SessionFilterUI> = {}) {
     { userId: 'alice', label: 'Alice', isSelf: false, selected: ['sent'], onToggle: vi.fn() },
     { userId: 'bob', label: 'Bob', isSelf: false, selected: [], onToggle: vi.fn() },
   ]
-  const session: SessionFilterUI = { rows, state: over.state ?? 'ready', onRefresh }
+  h.session = { rows, state: over.state ?? 'ready', onRefresh }
   render(
     <FilterControls
       state={DEFAULT_FILTERS}
@@ -81,7 +90,6 @@ function sessionSetup(over: Partial<SessionFilterUI> = {}) {
       methods={[]}
       statusReady
       signedOut={false}
-      session={session}
     />,
   )
   return { rows, onRefresh }

@@ -174,6 +174,57 @@ describe('LogbookScreen — no board added', () => {
   })
 })
 
+describe('LogbookScreen — import-from-MoonBoard affordance', () => {
+  const addedBoard = { layoutId: 7, name: 'Mini MoonBoard 2025' }
+
+  it('offers Import from MoonBoard in the empty logbook and routes to /logbook/import', () => {
+    boardState.addedBoards = [addedBoard]
+    ascentsState.ascents = []
+    render(<LogbookScreen />)
+
+    expect(screen.getByText('No logged ascents yet')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Import from MoonBoard' }))
+    expect(navigate).toHaveBeenCalledWith({ to: '/logbook/import' })
+  })
+
+  it('offers the import affordance when nothing is logged on the active board', () => {
+    boardState.addedBoards = [addedBoard]
+    // Ascents exist, but on a different board → the active board's list is empty.
+    ascentsState.ascents = [
+      { id: 'x', boardLayoutId: 1, sent: true, sourceCatalogId: null, date: '2026-07-01' },
+    ]
+    render(<LogbookScreen />)
+
+    expect(screen.getByText('No ascents on Mini MoonBoard 2025')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Import from MoonBoard' }))
+    expect(navigate).toHaveBeenCalledWith({ to: '/logbook/import' })
+  })
+
+  it('does not surface the import affordance once the logbook has ascents', () => {
+    boardState.addedBoards = [addedBoard]
+    ascentsState.ascents = [
+      {
+        id: 'a1',
+        date: '2026-07-01',
+        boardLayoutId: 7,
+        problemName: 'CRIMP CITY',
+        problemGrade: '6A',
+        votedGrade: '6A',
+        tries: 1,
+        stars: 0,
+        comment: '',
+        sent: false,
+        sourceCatalogId: null,
+        userProblemId: null,
+      },
+    ]
+    render(<LogbookScreen />)
+
+    expect(screen.getByText('CRIMP CITY')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Import from MoonBoard' })).toBeNull()
+  })
+})
+
 describe('LogbookScreen — row tap-through to problem detail', () => {
   const addedBoard = { layoutId: 7, name: 'Mini MoonBoard 2025' }
   const baseAscent = {

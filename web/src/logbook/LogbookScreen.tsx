@@ -175,6 +175,11 @@ export function LogbookScreen() {
         <EmptyState
           title="No logged ascents yet"
           body="When you log tries or an ascent, it'll show up in your logbook."
+          action={
+            <Button variant="outline" onClick={() => void navigate({ to: '/logbook/import' })}>
+              Import from MoonBoard
+            </Button>
+          }
         />
         {error && <ErrorNote error={error} />}
       </div>
@@ -188,7 +193,12 @@ export function LogbookScreen() {
         {header}
         <EmptyState
           title={`No ascents on ${activeBoard.name}`}
-          body="Switch boards to see ascents logged elsewhere."
+          body="Switch boards to see ascents logged elsewhere, or bring in your history from the MoonBoard app."
+          action={
+            <Button variant="outline" onClick={() => void navigate({ to: '/logbook/import' })}>
+              Import from MoonBoard
+            </Button>
+          }
         />
       </div>
     )

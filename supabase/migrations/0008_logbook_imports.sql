@@ -82,13 +82,17 @@ create policy "Users read own logbook-import objects"
         bucket_id = 'logbook-imports'
         and (storage.foldername(name))[1] = auth.uid()::text
     );
--- Per-user object cap (abuse / denial-of-wallet guard): a user can hold at most 2 files
--- in their folder (a GDPR export is realistically one file, maybe a CSV + a JSON; Remove
--- handles mistakes). This must live on storage.objects (not just the metadata table): a
--- caller could upload objects directly and skip the row insert, so the storage layer is
--- the only place that bounds the actual stored bytes (2 × 25 MB = 50 MB/user). The
--- self-referencing count subquery runs under the user's SELECT policy, so it counts only
--- their own folder.
+-- Per-user object cap (SOFT abuse guard): a user's folder holds at most 2 files (a GDPR
+-- export is realistically one file, maybe a CSV + a JSON; Remove handles mistakes). Lives
+-- on storage.objects (not just the metadata table) because a caller could upload objects
+-- directly and skip the row insert. The self-referencing count subquery runs under the
+-- user's SELECT policy, so it counts only their own folder.
+--   Caveat: this is NOT concurrency-safe. Under READ COMMITTED the count subquery takes no
+--   lock and doesn't see other in-flight inserts, so a burst of *parallel* uploads can
+--   race past the cap (TOCTOU). It reliably stops accidental / sequential abuse; a
+--   determined attacker firing concurrent requests can exceed it. The hard backstop is the
+--   Supabase project-level storage limit. If a strict per-user quota is ever needed, move
+--   this to a BEFORE INSERT trigger that takes a per-user pg_advisory_xact_lock first.
 create policy "Users upload own logbook-import objects"
     on storage.objects for insert to authenticated
     with check (

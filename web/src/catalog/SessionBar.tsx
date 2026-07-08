@@ -19,6 +19,7 @@ import { refreshMemberAscents } from '../sessions/memberAscentsStore'
 import { defaultSessionName, MAX_SESSION_NAME, memberInitials } from '../sessions/sessionsTypes'
 import { MemberAvatar } from '../sessions/MemberAvatar'
 import { ShareSession } from '../sessions/ShareSession'
+import { AvatarGroup, AvatarGroupCount } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -121,7 +122,9 @@ function ActiveBar({ board, onShare }: { board: CatalogBoardDef; onShare: () => 
     <div className="flex items-center gap-2 border-b border-border bg-muted/60 px-3 py-2 text-sm">
       <SessionName board={board} name={activeSession.name} />
 
-      <div className="flex -space-x-1.5" aria-label={`${roster.length || 'loading'} members`}>
+      {/* shadcn AvatarGroup: overlaps the avatars and applies the ring-2 ring-background
+          separation to each; AvatarGroupCount is the "+N" overflow pill. */}
+      <AvatarGroup aria-label={`${roster.length || 'loading'} members`}>
         {shown.length === 0
           ? // Roster still loading — neutral placeholder dots (never raw user-ids).
             [0, 1].map((i) => (
@@ -132,15 +135,10 @@ function ActiveBar({ board, onShare }: { board: CatalogBoardDef; onShare: () => 
                 key={m.userId}
                 initials={memberInitials(m)}
                 title={m.displayName ?? m.handle ?? undefined}
-                className="ring-2 ring-background"
               />
             ))}
-        {extra > 0 && (
-          <span className="flex size-6 items-center justify-center rounded-full ring-2 ring-background bg-muted text-[0.6rem] font-medium text-muted-foreground">
-            +{extra}
-          </span>
-        )}
-      </div>
+        {extra > 0 && <AvatarGroupCount className="text-[0.6rem]">+{extra}</AvatarGroupCount>}
+      </AvatarGroup>
 
       <div className="ml-auto flex items-center gap-1">
         <Button variant="ghost" size="icon" className="size-8" onClick={() => void refresh()} aria-label="Refresh members">

@@ -41,6 +41,10 @@ const DB_NAME = 'moonboard-catalog'
 const STORE = 'problems'
 const DB_VERSION = 1
 const EPOCH = '1970-01-01T00:00:00+00:00'
+// PostgREST caps a response at ~1000 rows, so a slab larger than that (the full
+// boards now run to ~20k) must be pulled page-by-page or the sync silently stops
+// after the first page. Page strictly BELOW that cap.
+const PAGE_SIZE = 1000
 
 function cursorKey(layoutId: number, angle: number): string {
   return `catalogCursor.${layoutId}_${angle}`
@@ -85,15 +89,24 @@ export async function syncSlab(layoutId: number, angle: number): Promise<SyncRes
     // data" (the app still runs) rather than failing — same as the old anon REST path.
     let rows: CatalogRow[] = []
     if (supabase) {
-      const { data, error } = await supabase
-        .from('catalog_problems')
-        .select('*')
-        .eq('layout_id', layoutId)
-        .eq('angle', angle)
-        .gt('updated_at', cursor)
-        .order('updated_at', { ascending: true })
-      if (error) throw error
-      rows = (data ?? []) as CatalogRow[]
+      // Page through the whole delta in one sync. Order by (updated_at, id) so paging is
+      // deterministic even when many rows share an updated_at (a batch import stamps them
+      // near-identically); range() walks fixed windows until a short page ends it.
+      for (let from = 0; ; from += PAGE_SIZE) {
+        const { data, error } = await supabase
+          .from('catalog_problems')
+          .select('*')
+          .eq('layout_id', layoutId)
+          .eq('angle', angle)
+          .gt('updated_at', cursor)
+          .order('updated_at', { ascending: true })
+          .order('source_catalog_id', { ascending: true })
+          .range(from, from + PAGE_SIZE - 1)
+        if (error) throw error
+        const page = (data ?? []) as CatalogRow[]
+        rows.push(...page)
+        if (page.length < PAGE_SIZE) break
+      }
     }
     if (rows.length > 0) {
       const db = await openDB()

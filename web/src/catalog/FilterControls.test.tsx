@@ -25,7 +25,6 @@ function setup(over: Partial<FilterState> = {}, auth: { statusReady?: boolean; s
       onChange={onChange}
       board={board}
       gradeSpan={gradeSpan}
-      methods={['Footless', 'No kickboard']}
       statusReady={auth.statusReady ?? true}
       signedOut={auth.signedOut ?? false}
     />,
@@ -38,6 +37,13 @@ describe('FilterControls', () => {
     const { onChange } = setup()
     fireEvent.click(screen.getByRole('button', { name: 'Benchmarks' }))
     expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ benchmarkOnly: true }))
+  })
+
+  it('shows the fixed foot-rule method options regardless of slab contents', () => {
+    setup()
+    for (const label of ['No kickboard', 'Footless', 'Footless + kickboard']) {
+      expect(screen.getByRole('button', { name: label })).toBeInTheDocument()
+    }
   })
 
   it('toggles a method chip', () => {
@@ -87,7 +93,6 @@ function sessionSetup(over: Partial<SessionFilterUI> = {}) {
       onChange={vi.fn()}
       board={board}
       gradeSpan={gradeSpan}
-      methods={[]}
       statusReady
       signedOut={false}
     />,

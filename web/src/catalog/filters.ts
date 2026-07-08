@@ -28,6 +28,15 @@ export const STATUS_LABELS: Record<StatusKey, string> = {
   unlogged: 'Not logged',
 }
 
+/**
+ * The MoonBoard foot-rule "method" labels, as a FIXED list — the foot-rule subset of
+ * iOS's CatalogListView.methodChoices (which additionally carries an "Any marked holds"
+ * sentinel that is NOT a `method` value and so has no place here). A problem's `method`
+ * is one of these or null. The filter shows all of them regardless of which appear in the
+ * loaded slab, so the option is discoverable before any method-tagged problem loads.
+ */
+export const METHOD_LABELS: readonly string[] = ['No kickboard', 'Footless', 'Footless + kickboard']
+
 /** The dimension a sort key orders on — the secondary key must differ from the primary. */
 export function sortDimension(key: SortKey): 'grade' | 'stars' | 'repeats' {
   if (key === 'easiest' || key === 'hardest') return 'grade'

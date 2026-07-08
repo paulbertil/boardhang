@@ -113,15 +113,12 @@ export function CatalogScreen() {
     void navigate({ search: (prev) => ({ ...prev, ...filtersToSearch(next) }), replace: true })
   }
 
-  // The slab's actual grade span (ordinal) for the slider, and its methods.
+  // The slab's actual grade span (ordinal) for the slider. (The Method filter uses a
+  // fixed label list, not slab-derived — see FilterControls / METHOD_LABELS.)
   const gradeSpan = useMemo<[number, number]>(() => {
     const idx = problems.map((p) => gradeIndex(p.grade)).filter((i) => i < FONT_GRADES.length)
     return idx.length ? [Math.min(...idx), Math.max(...idx)] : [0, FONT_GRADES.length - 1]
   }, [problems])
-  const methods = useMemo(
-    () => [...new Set(problems.map((p) => p.method).filter((m): m is string => !!m))].sort(),
-    [problems],
-  )
 
   // Installed-hold-set climbable check. The raw string is read in render (boardStore
   // re-renders this component when it changes) and is a memo dep, so toggling installed
@@ -223,7 +220,7 @@ export function CatalogScreen() {
           keeps it there as a long list scrolls; pointer-events fall through. */}
       <div className="pointer-events-none sticky bottom-4 z-30 mt-auto flex flex-col items-end gap-3">
         <RecentsSheet board={board} angle={angle} problems={problems} favoriteIds={favoriteIds} sentIds={sentIds} onSelect={openRecent} />
-        <FilterSheet state={filters} onChange={setFilters} board={board} gradeSpan={gradeSpan} methods={methods} statusReady={statusReady} signedOut={signedOut} />
+        <FilterSheet state={filters} onChange={setFilters} board={board} gradeSpan={gradeSpan} statusReady={statusReady} signedOut={signedOut} />
       </div>
 
       <Drawer open={drawerOpen} onOpenChange={(open) => !open && closeDrawer()} showSwipeHandle>

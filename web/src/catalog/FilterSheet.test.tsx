@@ -17,7 +17,6 @@ async function open(
       onChange={onChange}
       board={board}
       gradeSpan={[3, 15]}
-      methods={[]}
       statusReady={auth.statusReady ?? true}
       signedOut={auth.signedOut ?? false}
     />,

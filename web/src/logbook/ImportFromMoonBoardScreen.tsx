@@ -1,16 +1,19 @@
-// Import from MoonBoard — the honest, GDPR-based way to get your own logbook out of the
-// official app. There is no API import: the MoonBoard app is locked behind Firebase App
-// Check / Play Integrity + cert pinning + PairIP, so nothing but the genuine app can call
-// its backend. Instead we help the user file a UK GDPR Article 15/20 request to Moon
-// Climbing (they must supply the logbook in CSV/JSON). This screen explains that and
-// generates a prefilled email; parsing the returned file into `ascents` is a later step.
+// Import from MoonBoard — two tabs. "Request": the honest, GDPR-based way to get your own
+// logbook out of the official app (there's no API import — the app is locked behind
+// Firebase App Check / Play Integrity + cert pinning + PairIP), which drafts a prefilled
+// Article 15/20 request email. "Upload": once Moon sends the file back, upload it here so
+// we can build the importer (sample collection — see UploadPanel). Active tab lives in the
+// URL as `?tab=request|upload` (importSearch.ts).
 
 import { useState } from 'react'
 import { getRouteApi } from '@tanstack/react-router'
 import { ChevronLeft } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { buildGdprEmail, renderGdprEmailText, RECIPIENT } from './moonboardImport'
+import { UploadPanel } from './UploadPanel'
+import type { ImportTab } from './importSearch'
 
 const routeApi = getRouteApi('/logbook/import')
 
@@ -23,6 +26,49 @@ function looksLikeEmail(value: string): boolean {
 
 export function ImportFromMoonBoardScreen() {
   const navigate = routeApi.useNavigate()
+  const { tab } = routeApi.useSearch()
+
+  return (
+    <div className="flex flex-1 flex-col px-3">
+      <div className="mb-3 px-1 pt-1">
+        <Button
+          variant="ghost"
+          size="sm"
+          className="-ml-2 mb-1 h-7 px-2 text-muted-foreground"
+          onClick={() => void navigate({ to: '/logbook' })}
+        >
+          <ChevronLeft className="size-4" />
+          Logbook
+        </Button>
+        <h1 className="text-lg font-bold tracking-tight">Import from MoonBoard</h1>
+      </div>
+
+      <Tabs
+        value={tab}
+        onValueChange={(value) =>
+          void navigate({ search: (prev) => ({ ...prev, tab: value as ImportTab }) })
+        }
+      >
+        <TabsList className="w-full">
+          <TabsTrigger value="request">Request</TabsTrigger>
+          <TabsTrigger value="upload">Upload</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="request" className="mt-4">
+          <RequestPanel />
+        </TabsContent>
+
+        <TabsContent value="upload" className="mt-4">
+          <UploadPanel />
+        </TabsContent>
+      </Tabs>
+    </div>
+  )
+}
+
+/** The GDPR data-request flow: explainer + a prefilled-mailto generator with a copy
+ *  fallback. Public — no sign-in needed to draft the request. */
+function RequestPanel() {
   const [email, setEmail] = useState('')
   const [username, setUsername] = useState('')
   const [copied, setCopied] = useState(false)
@@ -32,7 +78,6 @@ export function ImportFromMoonBoardScreen() {
   function openEmailRequest() {
     if (!canGenerate) return
     const built = buildGdprEmail({ email, username: username || undefined })
-    // Hand off to the user's mail client with the draft prefilled.
     window.location.href = built.mailtoHref
   }
 
@@ -50,20 +95,7 @@ export function ImportFromMoonBoardScreen() {
   }
 
   return (
-    <div className="flex flex-1 flex-col px-3">
-      <div className="mb-3 px-1 pt-1">
-        <Button
-          variant="ghost"
-          size="sm"
-          className="-ml-2 mb-1 h-7 px-2 text-muted-foreground"
-          onClick={() => void navigate({ to: '/logbook' })}
-        >
-          <ChevronLeft className="size-4" />
-          Logbook
-        </Button>
-        <h1 className="text-lg font-bold tracking-tight">Import from MoonBoard</h1>
-      </div>
-
+    <div className="space-y-4">
       {/* Why there's no one-click import, and what to do instead. */}
       <section className="rounded-lg border border-border p-4">
         <h2 className="text-sm font-semibold">Why you can’t just connect your account</h2>
@@ -79,7 +111,7 @@ export function ImportFromMoonBoardScreen() {
       </section>
 
       {/* The request form. */}
-      <section className="mt-4 rounded-lg border border-border p-4">
+      <section className="rounded-lg border border-border p-4">
         <div className="space-y-3">
           <div className="space-y-1">
             <label htmlFor="mb-email" className="text-sm font-medium">
@@ -125,8 +157,9 @@ export function ImportFromMoonBoardScreen() {
         </p>
       </section>
 
-      <p className="mt-4 px-1 text-xs text-muted-foreground">
-        Once Moon sends your file back, importing it into your logbook here is coming next.
+      <p className="px-1 text-xs text-muted-foreground">
+        Once Moon sends your file back, upload it in the Upload tab so we can bring your
+        history in.
       </p>
     </div>
   )

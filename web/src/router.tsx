@@ -41,6 +41,7 @@ import { getActiveBoardId, getAddedBoardIds } from './board/boardStore'
 import { catalogNavTarget } from './catalog/catalogNav'
 import { CATALOG_SEARCH_DEFAULTS, validateCatalogSearch } from './catalog/catalogSearch'
 import { LOGBOOK_SEARCH_DEFAULTS, validateLogbookSearch } from './logbook/logbookSearch'
+import { IMPORT_SEARCH_DEFAULTS, validateImportSearch } from './logbook/importSearch'
 
 function BoardsRoute() {
   const navigate = useNavigate()
@@ -94,6 +95,8 @@ function buildRouteTree() {
   const logbookImportRoute = createRoute({
     getParentRoute: () => rootRoute,
     path: '/logbook/import',
+    validateSearch: validateImportSearch,
+    search: { middlewares: [stripSearchParams(IMPORT_SEARCH_DEFAULTS)] },
     component: ImportFromMoonBoardScreen,
   })
 

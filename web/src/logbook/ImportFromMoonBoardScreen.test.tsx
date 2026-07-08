@@ -98,3 +98,27 @@ describe('ImportFromMoonBoardScreen', () => {
     expect(body).not.toContain('undefined')
   })
 })
+
+describe('ImportFromMoonBoardScreen — tabs', () => {
+  it('shows Request and Upload tabs with Request active by default', async () => {
+    renderWithRouter('/logbook/import')
+    expect(await screen.findByRole('tab', { name: 'Request' })).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: 'Upload' })).toBeInTheDocument()
+    // Request panel is active → its email field is present.
+    expect(screen.getByLabelText(/account email/i)).toBeInTheDocument()
+  })
+
+  it('activates the Upload tab from ?tab=upload (request form not shown)', async () => {
+    renderWithRouter('/logbook/import?tab=upload')
+    expect(await screen.findByRole('tab', { name: 'Upload' })).toBeInTheDocument()
+    expect(screen.queryByLabelText(/account email/i)).toBeNull()
+  })
+
+  it('switches to the Upload tab when clicked', async () => {
+    renderWithRouter('/logbook/import')
+    expect(await screen.findByLabelText(/account email/i)).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('tab', { name: 'Upload' }))
+    // Only the active panel renders, so the request email field goes away.
+    await waitFor(() => expect(screen.queryByLabelText(/account email/i)).toBeNull())
+  })
+})

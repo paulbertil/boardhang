@@ -50,15 +50,20 @@ export function buildGdprEmail(input: GdprEmailInput): GdprEmail {
     '2. My right to data portability (Article 20).',
     '',
     'Please provide all personal data you hold associated with my account, and in ' +
-      'particular my complete MoonBoard logbook — every logged ascent and attempt, ' +
-      'including for each entry:',
+      'particular my complete MoonBoard logbook — every logged ascent and attempt. For ' +
+      'each entry, please include:',
     '',
-    '- problem name and setter',
-    '- the official grade and my logged/suggested grade',
-    '- number of attempts (tries)',
-    '- date climbed',
-    '- any rating (stars) and comment I left',
-    '- the board configuration / hold-set and angle',
+    '- the problem name and setter',
+    '- the board configuration / hold-set version (e.g. 2016, 2017, 2019, 2024, or Mini) ' +
+      'and the angle (25° or 40°)',
+    '- the official grade and my own logged/suggested grade',
+    '- the date and time I logged it, including the time zone',
+    '- the number of attempts, and whether it was a completed ascent or just an attempt',
+    '- any star rating and comment I left',
+    '',
+    'Where you hold it, please also include, for each entry, the problem’s unique ' +
+      'identifier as stored against my account and the problem’s hold/move layout — this ' +
+      'helps me identify exactly which problem each entry refers to.',
     '',
     'Please provide this in a structured, commonly used, machine-readable format (CSV ' +
       'or JSON) as required by Article 20, rather than screenshots or PDF.',

@@ -55,6 +55,18 @@ describe('buildGdprEmail', () => {
     expect(body).toContain('CSV or JSON')
     expect(body).toContain('one calendar month')
   })
+
+  it('requests the matcher-critical fields (board version, angle, time zone, identifier)', () => {
+    const { body } = buildGdprEmail({ email: 'climber@example.com' })
+    // Without board version + angle + timestamp, importer name-matching across the five
+    // MoonBoard set versions is ambiguous — these must stay in the ask.
+    expect(body).toContain('hold-set version')
+    expect(body).toContain('angle')
+    expect(body).toContain('time zone')
+    // The id/holds are the opportunistic-booster ask.
+    expect(body).toContain('unique')
+    expect(body).toContain('hold/move layout')
+  })
 })
 
 describe('renderGdprEmailText', () => {

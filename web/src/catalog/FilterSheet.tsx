@@ -18,7 +18,6 @@ interface FilterSheetProps {
   onChange: (state: FilterState) => void
   board: CatalogBoardDef
   gradeSpan: [number, number]
-  methods: string[]
   /** Signed in AND ascents loaded — gates the status filter's count + apply. */
   statusReady: boolean
   /** Definitively signed out — disables the status chips with a sign-in hint. */
@@ -30,7 +29,6 @@ export function FilterSheet({
   onChange,
   board,
   gradeSpan,
-  methods,
   statusReady,
   signedOut,
 }: FilterSheetProps) {
@@ -69,7 +67,6 @@ export function FilterSheet({
               onChange={onChange}
               board={board}
               gradeSpan={gradeSpan}
-              methods={methods}
               statusReady={statusReady}
               signedOut={signedOut}
             />

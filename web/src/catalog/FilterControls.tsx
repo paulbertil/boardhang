@@ -14,6 +14,7 @@ import { HoldFilterPicker } from './HoldFilterPicker'
 import { MemberStatusRow } from './MemberStatusRow'
 import { useSessionFilterRows } from './useSessionFilterRows'
 import {
+  METHOD_LABELS,
   SORT_LABELS,
   sortDimension,
   type FilterState,
@@ -50,8 +51,6 @@ interface FilterControlsProps {
   board: CatalogBoardDef
   /** The slab's actual grade span as ordinal [min, max]. */
   gradeSpan: [number, number]
-  /** Distinct method labels present in the slab. */
-  methods: string[]
   /** Signed in AND ascents loaded — gates the status filter's count + Reset. */
   statusReady: boolean
   /** Definitively signed out — disables the status chips and shows the hint. */
@@ -80,7 +79,6 @@ export function FilterControls({
   onChange,
   board,
   gradeSpan,
-  methods,
   statusReady,
   signedOut,
 }: FilterControlsProps) {
@@ -247,25 +245,25 @@ export function FilterControls({
         )}
       </Field>
 
-      {methods.length > 0 && (
-        <Field label="Method">
-          <div className="flex flex-wrap gap-1.5">
-            {methods.map((m) => (
-              <Toggle
-                key={m}
-                variant="outline"
-                size="sm"
-                pressed={state.methods.includes(m)}
-                onPressedChange={(active) =>
-                  set({ methods: active ? [...state.methods, m] : state.methods.filter((x) => x !== m) })
-                }
-              >
-                {m}
-              </Toggle>
-            ))}
-          </div>
-        </Field>
-      )}
+      {/* Foot rules — a fixed list (iOS parity), always shown so it's discoverable
+          before any method-tagged problem loads. Label kept as "Method" to match iOS. */}
+      <Field label="Method">
+        <div className="flex flex-wrap gap-1.5">
+          {METHOD_LABELS.map((m) => (
+            <Toggle
+              key={m}
+              variant="outline"
+              size="sm"
+              pressed={state.methods.includes(m)}
+              onPressedChange={(active) =>
+                set({ methods: active ? [...state.methods, m] : state.methods.filter((x) => x !== m) })
+              }
+            >
+              {m}
+            </Toggle>
+          ))}
+        </div>
+      </Field>
 
       <HoldFilterPicker
         board={board}

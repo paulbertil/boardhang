@@ -39,7 +39,7 @@ export function UploadPanel() {
           Uploading is tied to your account so only you (and the app developer) can see the
           file.
         </p>
-        <SignInPanel />
+        <SignInPanel hideIntro />
       </div>
     )
   }

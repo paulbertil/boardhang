@@ -12,11 +12,14 @@ vi.mock('../board/CatalogBoard', () => ({
 }))
 vi.mock('./previewsStore', () => ({ useShowPreviews: () => true }))
 
-const saveToList = vi.fn()
-vi.mock('../lists/useAddToList', () => ({
-  useAddToList: ({ sourceCatalogId }: { sourceCatalogId: string }) => ({
-    saveToList: () => saveToList(sourceCatalogId),
-    element: <div data-testid="addtolist-element" />,
+const lightUp = vi.fn()
+vi.mock('../ble/useLightUp', () => ({
+  useLightUp: () => ({
+    lightUp: (holds: unknown) => lightUp(holds),
+    lit: false,
+    busy: null,
+    error: null,
+    state: 'disconnected',
   }),
 }))
 
@@ -138,11 +141,11 @@ describe('LastOpenedBar', () => {
     expect(isFavorite('b')).toBe(true)
   })
 
-  it('➕ triggers save-to-list for the shown problem', () => {
+  it('💡 lights up the shown problem’s holds', () => {
     recordOpened(7, ANGLE, 'b')
     mount()
-    fireEvent.click(screen.getByRole('button', { name: 'Save to list' }))
-    expect(saveToList).toHaveBeenCalledWith('b')
+    fireEvent.click(screen.getByRole('button', { name: 'Light up' }))
+    expect(lightUp).toHaveBeenCalledWith(b.holds)
   })
 
   it('× calls onDismiss', () => {

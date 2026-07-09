@@ -14,16 +14,15 @@ import { useAuth } from '../auth/AuthProvider'
 import { SignInDialog } from '../auth/SignInDialog'
 import { addAttemptTries } from '../logbook/ascents'
 import { TryStepper } from '../logbook/TryStepper'
-import { bleClient, connectBoard, isConnected, setBleError, useBle } from '../ble/useBle'
+import { useLightUp } from '../ble/useLightUp'
 import { CatalogBoard } from '../board/CatalogBoard'
 import type { CatalogBoardDef } from '../board/boards'
-import { getActiveHoldSetsRaw, getFlipped } from '../board/boardStore'
+import { getActiveHoldSetsRaw } from '../board/boardStore'
 import { holdSetContext } from '../board/holdSetMembership'
-import type { CatalogHold, CatalogProblem } from './catalogSync'
+import type { CatalogProblem } from './catalogSync'
 import { recordRecent } from './recentsStore'
 import { recordOpened } from './lastOpenedStore'
 import { useFavorites } from './favoritesStore'
-import type { HoldAssignment } from '../types'
 import { LogAscentSheet, type LogTarget } from '../logbook/LogAscentSheet'
 import { useAddToList } from '../lists/useAddToList'
 import { Button } from '@/components/ui/button'
@@ -44,10 +43,6 @@ interface ProblemDetailProps {
   onNavigate: (id: string) => void
 }
 
-function toHoldAssignments(holds: CatalogHold[]): HoldAssignment[] {
-  return holds.map((h) => ({ col: h.c, row: h.r, type: h.t }))
-}
-
 export function ProblemDetail({
   problem: current,
   displayed,
@@ -59,11 +54,7 @@ export function ProblemDetail({
   onNavigate,
 }: ProblemDetailProps) {
   const swipeStart = useRef<{ x: number; y: number } | null>(null)
-  const { state } = useBle()
   const { toggleFavorite } = useFavorites()
-  const [lit, setLit] = useState(false)
-  const [lightError, setLightError] = useState<string | null>(null)
-  const [busy, setBusy] = useState<'connecting' | 'sending' | null>(null)
   const { status } = useAuth()
   const signedIn = status !== 'signedOut'
   const [logTarget, setLogTarget] = useState<LogTarget | null>(null)
@@ -79,6 +70,8 @@ export function ProblemDetail({
 
   // Auth-gated save-to-list (owns its sheet + sign-in-resume — KTD3), shared with the bar.
   const addToList = useAddToList({ sourceCatalogId: currentId, board })
+  // BLE "light up" for the shown problem (connect-then-send), shared with the bar.
+  const light = useLightUp(board, currentId)
 
   // Record the view (move-to-front recents) whenever the shown problem changes; the
   // same seam seeds the last-opened bar (KTD2) so paging in the drawer keeps it current.
@@ -86,12 +79,6 @@ export function ProblemDetail({
     recordRecent(board.layoutId, angle, currentId)
     recordOpened(board.layoutId, angle, currentId)
   }, [currentId, board.layoutId, angle])
-
-  // A newly-shown problem isn't lit yet; disconnecting clears the lit state.
-  useEffect(() => setLit(false), [currentId])
-  useEffect(() => {
-    if (state !== 'connected') setLit(false)
-  }, [state])
 
   // ── Deferred flush of the inline "Log try" stepper (iOS parity) ──────────────
   // Write/merge the unsent-attempt row only when the user leaves the problem: paging
@@ -148,39 +135,12 @@ export function ProblemDetail({
   const isFav = favoriteIds.has(currentId)
   const isSent = sentIds.has(currentId)
 
-  async function lightUp() {
-    if (busy) return
-    setLightError(null)
-    setBleError(null)
-    if (!isConnected()) {
-      setBusy('connecting')
-      await connectBoard()
-      if (!isConnected()) {
-        setBusy(null)
-        return // cancelled or failed
-      }
-    }
-    setBusy('sending')
-    try {
-      await bleClient.send(toHoldAssignments(current.holds), {
-        rows: board.geometry.numRows,
-        flipped: getFlipped(board.layoutId),
-        showBeta: true,
-      })
-      setLit(true)
-    } catch (err) {
-      setLightError(err instanceof Error ? err.message : String(err))
-    } finally {
-      setBusy(null)
-    }
-  }
-
-  const lightLabel = busy === 'connecting'
+  const lightLabel = light.busy === 'connecting'
     ? 'Connecting…'
-    : busy === 'sending'
+    : light.busy === 'sending'
       ? 'Sending…'
-      : state === 'connected'
-        ? lit
+      : light.state === 'connected'
+        ? light.lit
           ? 'Lit — send again'
           : 'Light up'
         : 'Connect & light up'
@@ -319,11 +279,17 @@ export function ProblemDetail({
       </div>
 
       <div className="space-y-1">
-        <Button size="lg" variant="secondary" className="w-full" onClick={lightUp} disabled={busy !== null}>
-          <Lightbulb className={lit ? 'size-5 fill-current' : 'size-5'} />
+        <Button
+          size="lg"
+          variant="secondary"
+          className="w-full"
+          onClick={() => void light.lightUp(current.holds)}
+          disabled={light.busy !== null}
+        >
+          <Lightbulb className={light.lit ? 'size-5 fill-current' : 'size-5'} />
           {lightLabel}
         </Button>
-        {lightError && <p className="text-center text-sm text-destructive">{lightError}</p>}
+        {light.error && <p className="text-center text-sm text-destructive">{light.error}</p>}
       </div>
 
       <div className="flex items-center gap-3">

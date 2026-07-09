@@ -7,14 +7,14 @@
 // when the board or angle changes (the store is keyed per slab).
 
 import { useEffect, useState } from 'react'
-import { ChevronLeft, ChevronRight, Heart, ListPlus, X } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Heart, Lightbulb, X } from 'lucide-react'
 import type { CatalogBoardDef } from '../board/boards'
 import { CatalogBoard } from '../board/CatalogBoard'
 import type { CatalogProblem } from './catalogSync'
 import { useFavorites } from './favoritesStore'
 import { useLastOpened } from './lastOpenedStore'
 import { useShowPreviews } from './previewsStore'
-import { useAddToList } from '../lists/useAddToList'
+import { useLightUp } from '../ble/useLightUp'
 import { Button } from '@/components/ui/button'
 
 interface LastOpenedBarProps {
@@ -58,8 +58,8 @@ export function LastOpenedBar({
       problems.find((p) => p.source_catalog_id === shownId))
     : undefined
 
-  // Hooks must run unconditionally; a null shownId yields an inert flow (never triggered).
-  const addToList = useAddToList({ sourceCatalogId: shownId ?? '', board })
+  // Hooks must run unconditionally; a null shownId yields an inert action (never triggered).
+  const light = useLightUp(board, shownId ?? '')
 
   if (!shown) return null
 
@@ -73,7 +73,7 @@ export function LastOpenedBar({
   const subtitle = shown.setter ? `by ${shown.setter}` : `${shown.holds.length} holds`
 
   return (
-    <div className="sticky bottom-0 z-20 -mx-4 border-t border-border bg-background/95 px-2 py-1.5 backdrop-blur supports-[backdrop-filter]:bg-background/80">
+    <div className="sticky -bottom-4 z-20 -mx-4 border-t border-border bg-background/95 px-2 py-1.5 backdrop-blur supports-[backdrop-filter]:bg-background/80">
       <div className="flex items-center gap-1">
         {/* Body: thumbnail + identity — tap to reopen the full drawer (R5). */}
         <button
@@ -136,10 +136,11 @@ export function LastOpenedBar({
             variant="ghost"
             size="icon"
             className="size-8"
-            aria-label="Save to list"
-            onClick={addToList.saveToList}
+            aria-label={light.busy ? 'Lighting up…' : light.lit ? 'Lit — send again' : 'Light up'}
+            disabled={light.busy !== null}
+            onClick={() => void light.lightUp(shown.holds)}
           >
-            <ListPlus className="size-4" />
+            <Lightbulb className={light.lit ? 'size-4 fill-current' : 'size-4'} />
           </Button>
           <Button
             variant="ghost"
@@ -155,7 +156,6 @@ export function LastOpenedBar({
           </Button>
         </div>
       </div>
-      {addToList.element}
     </div>
   )
 }

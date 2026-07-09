@@ -17,6 +17,8 @@ import { CatalogList } from './CatalogList'
 import { FilterSheet } from './FilterSheet'
 import { SessionBar } from './SessionBar'
 import { RecentsSheet } from './RecentsSheet'
+import { LastOpenedBar } from './LastOpenedBar'
+import { dismissLastOpened, useLastOpened } from './lastOpenedStore'
 import { ProblemDetail } from './ProblemDetail'
 import { Drawer, DrawerContent, DrawerTitle } from '@/components/ui/drawer'
 import { Button } from '@/components/ui/button'
@@ -198,6 +200,10 @@ export function CatalogScreen() {
   const openRecent = (stack: CatalogProblem[], index: number) =>
     openDrawer(stack[index].source_catalog_id, stack)
 
+  // The last-opened bar shows once a problem has been opened this session (per slab).
+  // Its presence lifts the FAB column so the History/Filter FABs clear the bar.
+  const barVisible = useLastOpened(board.layoutId, angle) !== null
+
   return (
     <div className="flex flex-1 flex-col">
       {!added && <UnaddedBoardBanner name={board.name} onAdd={() => addBoard(board.layoutId)} />}
@@ -217,11 +223,28 @@ export function CatalogScreen() {
       />
       {/* Shared FAB column: recents on top, filter below (mirrors iOS's VStack).
           mt-auto pins it to the bottom of the flex-column scroll region; sticky
-          keeps it there as a long list scrolls; pointer-events fall through. */}
-      <div className="pointer-events-none sticky bottom-4 z-30 mt-auto flex flex-col items-end gap-3">
+          keeps it there as a long list scrolls; pointer-events fall through. When the
+          last-opened bar is present, lift the column so the FABs clear it. */}
+      <div
+        className={`pointer-events-none sticky z-30 mt-auto flex flex-col items-end gap-3 ${
+          barVisible ? 'bottom-[4.75rem]' : 'bottom-4'
+        }`}
+      >
         <RecentsSheet board={board} angle={angle} problems={problems} favoriteIds={favoriteIds} sentIds={sentIds} onSelect={openRecent} />
         <FilterSheet state={filters} onChange={setFilters} board={board} gradeSpan={gradeSpan} statusReady={statusReady} signedOut={signedOut} />
       </div>
+
+      {/* Last-opened bar: a slim persistent strip pinned above the nav (KTD1). Renders
+          nothing until a problem has been opened this session. */}
+      <LastOpenedBar
+        board={board}
+        angle={angle}
+        displayed={displayed}
+        problems={problems}
+        highlightHolds={highlightHolds}
+        onOpen={openDrawer}
+        onDismiss={() => dismissLastOpened(board.layoutId, angle)}
+      />
 
       <Drawer open={drawerOpen} onOpenChange={(open) => !open && closeDrawer()} showSwipeHandle>
         <DrawerContent>

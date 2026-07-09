@@ -2,9 +2,12 @@
 // Deliberately IN-MEMORY only (no localStorage): the bar is session-only, so a cold
 // load must start empty even though recentsStore has persisted history. Scoping the
 // entry by layoutId+angle means switching board or angle naturally clears the bar
-// (a different key has no entry). Mirrors the recentsStore reactive pattern
-// (listeners + emit + cache-per-key snapshot) minus persistence and the cross-tab
-// storage listener.
+// (a different key has no entry). Uses the codebase's listeners + emit +
+// useSyncExternalStore idiom, minus persistence and the cross-tab storage listener.
+//
+// No per-key snapshot cache (unlike recentsStore, which returns arrays): the snapshot
+// here is a primitive (string | null), which useSyncExternalStore already compares by
+// Object.is, so equal reads never trigger a re-render.
 
 import { useSyncExternalStore } from 'react'
 
@@ -14,24 +17,14 @@ const key = (layoutId: number, angle: number) => `${layoutId}_${angle}`
 const opened = new Map<string, string>()
 
 const listeners = new Set<() => void>()
-// Cache the snapshot per key so useSyncExternalStore gets a stable value between
-// writes (React bails out of re-render when the reference is unchanged). Cleared on
-// every emit so the next read reflects the mutated map.
-const cache = new Map<string, string | null>()
 
 function emit(): void {
-  cache.clear()
   for (const l of listeners) l()
-}
-
-function snapshotFor(k: string): string | null {
-  if (!cache.has(k)) cache.set(k, opened.get(k) ?? null)
-  return cache.get(k) ?? null
 }
 
 /** The last-opened problem id for a slab this session, or null. */
 export function getLastOpened(layoutId: number, angle: number): string | null {
-  return snapshotFor(key(layoutId, angle))
+  return opened.get(key(layoutId, angle)) ?? null
 }
 
 /** Record that a problem was opened (drawer) — seeds/updates the bar for this slab. */
@@ -61,6 +54,6 @@ export function useLastOpened(layoutId: number, angle: number): string | null {
       listeners.add(cb)
       return () => listeners.delete(cb)
     },
-    () => snapshotFor(k),
+    () => opened.get(k) ?? null,
   )
 }

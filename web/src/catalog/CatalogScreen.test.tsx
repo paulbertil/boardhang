@@ -9,6 +9,38 @@ import { useSlab } from './useSlab'
 import { useEnsureAscentsLoaded } from '../logbook/ascents'
 import type { Ascent } from '../logbook/ascents'
 import { useAuth } from '../auth/AuthProvider'
+import type { SavedList } from '../lists/listsTypes'
+
+// The saved-list filter reads the lists store + the union-membership hook. Mock both so
+// the suite controls list state without a real IndexedDB / cloud. Defaults (loaded, no
+// lists, empty ready membership) leave every pre-existing test untouched: no ?list means
+// an empty listFilter, no "Lists" control, and a no-op predicate.
+const listsMock = vi.hoisted(() => ({
+  saved: { status: 'loaded' as string, lists: [] as SavedList[], error: null as string | null },
+  members: { ids: new Set<string>(), ready: true },
+  loadLists: vi.fn().mockResolvedValue(undefined),
+}))
+vi.mock('../lists/listsStore', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../lists/listsStore')>()
+  return {
+    ...actual,
+    useSavedLists: () => listsMock.saved,
+    loadLists: (...a: unknown[]) => listsMock.loadLists(...a),
+  }
+})
+vi.mock('../lists/useListMemberIds', () => ({ useListMemberIds: () => listsMock.members }))
+
+function savedListFixture(id: string, name: string, boardLayoutId = LAYOUT): SavedList {
+  return {
+    id,
+    ownerId: 'user-A',
+    name,
+    boardLayoutId,
+    createdAt: '2026-07-06T00:00:00Z',
+    updatedAt: '2026-07-06T00:00:00Z',
+    deleted: false,
+  }
+}
 
 // Board 7 / angle 40 is the default board+angle (board 7's only angle is 40).
 const LAYOUT = 7
@@ -121,6 +153,9 @@ beforeEach(() => {
   // to their defaults each test (else a signed-in / ascent-heavy test leaks forward).
   vi.mocked(useAuth).mockReturnValue(authValue('signedOut'))
   vi.mocked(useEnsureAscentsLoaded).mockReturnValue({ status: 'loaded', ascents: [], error: null })
+  // Reset the saved-list mocks to their inert defaults so a list-filter test can't leak.
+  listsMock.saved = { status: 'loaded', lists: [], error: null }
+  listsMock.members = { ids: new Set<string>(), ready: true }
 })
 
 describe('CatalogScreen — recents open as their own stack', () => {
@@ -336,6 +371,44 @@ describe('CatalogScreen — ascent-status filter', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Filters' }))
     expect(await screen.findByRole('dialog')).toBeInTheDocument()
     expect(screen.queryByText('Sign in to filter by status')).toBeNull()
+  })
+})
+
+describe('CatalogScreen — saved-list filter over routing', () => {
+  it('does NOT strip a valid ?list= deep-link while the lists store is still loading (cold-launch guard)', async () => {
+    // Cold launch: lists haven't loaded yet. A deep-linked ?list=L1 must survive — pruning
+    // against the empty store here would destroy a legitimate shared link (the P1 bug).
+    listsMock.saved = { status: 'loading', lists: [], error: null }
+    listsMock.members = { ids: new Set(), ready: false } // membership not ready → fail open
+    addBoard(LAYOUT)
+    const { router } = renderWithRouter(`/board/${LAYOUT}/catalog?list=L1`)
+    // Fail-open: all problems visible, not a blanked grid.
+    expect(await screen.findByText('Visible')).toBeInTheDocument()
+    expect(screen.getByText('HiddenB')).toBeInTheDocument()
+    // The param is retained (not self-healed away) until lists actually load.
+    expect(router.state.location.search).toHaveProperty('list', 'L1')
+  })
+
+  it('filters to a list’s members once loaded', async () => {
+    listsMock.saved = { status: 'loaded', lists: [savedListFixture('L1', 'Projects')], error: null }
+    listsMock.members = { ids: new Set(['a']), ready: true } // only 'Visible' (a) is in the list
+    addBoard(LAYOUT)
+    renderWithRouter(`/board/${LAYOUT}/catalog?list=L1`)
+    expect(await screen.findByText('Visible')).toBeInTheDocument()
+    expect(screen.queryByText('HiddenB')).toBeNull()
+    expect(screen.queryByText('HiddenC')).toBeNull()
+  })
+
+  it('prunes a stale/unknown list id once loaded and self-heals the URL', async () => {
+    // Loaded, but ?list=ghost matches no live board list → dropped, URL rewritten, grid unfiltered.
+    listsMock.saved = { status: 'loaded', lists: [savedListFixture('L1', 'Projects')], error: null }
+    listsMock.members = { ids: new Set(), ready: true }
+    addBoard(LAYOUT)
+    const { router } = renderWithRouter(`/board/${LAYOUT}/catalog?list=ghost`)
+    await screen.findByText('Visible')
+    await waitFor(() => expect(router.state.location.search).not.toHaveProperty('list'))
+    expect(screen.getByText('HiddenB')).toBeInTheDocument()
+    expect(screen.getByText('HiddenC')).toBeInTheDocument()
   })
 })
 

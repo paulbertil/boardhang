@@ -9,9 +9,12 @@
 // applies each pill's `patch` on tap. Benchmark is NOT a pill from that list — it's the
 // pinned toggle rendered here.
 
-import { X } from 'lucide-react'
+import { useState } from 'react'
+import { ListFilter, X } from 'lucide-react'
 import { describeActiveFilters } from './activeFilterChips'
+import { ListFilterSheet } from './ListFilterSheet'
 import { BENCHMARK_LABEL, FAVORITES_LABEL, type FilterState } from './filters'
+import type { SavedList } from '../lists/listsTypes'
 import { Toggle } from '@/components/ui/toggle'
 
 interface FilterPillBarProps {
@@ -21,10 +24,22 @@ interface FilterPillBarProps {
   inSession: boolean
   /** Signed in AND ascents loaded → status actually filters; gates status pills. */
   statusReady: boolean
+  /** This board's live lists — drives the "Lists" opener (hidden when empty, R4). */
+  boardLists: SavedList[]
+  /** Board lists by id — supplies chip labels for `listFilter`. */
+  listsById: ReadonlyMap<string, { name: string }>
 }
 
-export function FilterPillBar({ filters, onChange, inSession, statusReady }: FilterPillBarProps) {
-  const chips = describeActiveFilters(filters, { inSession, statusReady })
+export function FilterPillBar({
+  filters,
+  onChange,
+  inSession,
+  statusReady,
+  boardLists,
+  listsById,
+}: FilterPillBarProps) {
+  const chips = describeActiveFilters(filters, { inSession, statusReady, listsById })
+  const [listSheetOpen, setListSheetOpen] = useState(false)
 
   return (
     // -mx-4 + px-4: cancel the header's 1rem side padding so the scroll track spans the
@@ -64,6 +79,23 @@ export function FilterPillBar({ filters, onChange, inSession, statusReady }: Fil
         {FAVORITES_LABEL}
       </Toggle>
 
+      {/* "Lists" opener — a pinned control (like the toggles) that opens the multi-select
+          sheet rather than toggling a boolean. Rendered only when this board has ≥1 list
+          (R4): with none to pick, the control would be dead weight. */}
+      {boardLists.length > 0 && (
+        <Toggle
+          variant="outline"
+          size="sm"
+          pressed={filters.listFilter.length > 0}
+          onPressedChange={() => setListSheetOpen(true)}
+          aria-label="Filter by list"
+          className="h-6 shrink-0 gap-1 px-2 text-xs"
+        >
+          <ListFilter aria-hidden className="size-3.5" />
+          Lists
+        </Toggle>
+      )}
+
       {/* Divider between the pinned toggles (controls) and the removable active-filter
           tags. Only when there are tags — a trailing divider with nothing after reads as
           a mistake. */}
@@ -75,16 +107,31 @@ export function FilterPillBar({ filters, onChange, inSession, statusReady }: Fil
           type="button"
           onClick={() => onChange({ ...filters, ...chip.patch })}
           aria-label={`Remove ${chip.label} filter`}
+          // Full label in the native tooltip so a truncated (long) list-name chip is still
+          // legible on hover/long-press.
+          title={chip.label}
           // Outlined gray tag: the border defines the shape (a muted FILL would vanish
           // into the near-white frosted header in light mode, where --muted ≈
           // --background). Reads as secondary to the accent-FILLED pinned toggles, and
           // the trailing ✕ carries the "removable" signal. Works in both themes.
           className="inline-flex h-6 shrink-0 items-center gap-1 rounded-[min(var(--radius-md),12px)] border border-border bg-transparent px-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
         >
-          <span>{chip.label}</span>
-          <X aria-hidden className="size-3 text-muted-foreground" />
+          {/* Cap the label width so a long list name (up to MAX_LIST_NAME = 60) can't
+              dominate the single-line pill bar and push other chips off-screen. */}
+          <span className="max-w-[10rem] truncate">{chip.label}</span>
+          <X aria-hidden className="size-3 shrink-0 text-muted-foreground" />
         </button>
       ))}
+
+      {boardLists.length > 0 && (
+        <ListFilterSheet
+          open={listSheetOpen}
+          onOpenChange={setListSheetOpen}
+          boardLists={boardLists}
+          selected={filters.listFilter}
+          onChange={(listFilter) => onChange({ ...filters, listFilter })}
+        />
+      )}
     </div>
   )
 }

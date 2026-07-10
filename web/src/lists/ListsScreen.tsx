@@ -6,11 +6,12 @@
 
 import { useEffect, useState } from 'react'
 import { Link } from '@tanstack/react-router'
-import { Check, Pencil, RefreshCw, Trash2, X } from 'lucide-react'
+import { Check, Pencil, RefreshCw, Telescope, Trash2, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAuth } from '../auth/AuthProvider'
 import { SignInPanel } from '../auth/SignInPanel'
 import { boardByLayoutId } from '../board/boards'
+import { catalogNavTargetForList } from '../catalog/catalogNav'
 import { CatalogBoard } from '../board/CatalogBoard'
 import { useBoardStore } from '../board/boardStore'
 import { Button } from '@/components/ui/button'
@@ -338,6 +339,16 @@ function ListRowItem({
           </div>
         </div>
       </Link>
+      {/* "Show in catalog" bridge (R3.2/R7): browse this list in the catalog. */}
+      {board && (
+        <Link
+          {...catalogNavTargetForList(board, list.id)}
+          aria-label={`Show ${list.name} in the catalog`}
+          className="flex size-8 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:text-foreground"
+        >
+          <Telescope className="size-4" />
+        </Link>
+      )}
       <Button variant="ghost" size="icon-sm" aria-label={`Rename ${list.name}`} onClick={onStartEdit}>
         <Pencil className="size-4" />
       </Button>

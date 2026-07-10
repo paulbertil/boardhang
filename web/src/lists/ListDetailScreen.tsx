@@ -5,8 +5,9 @@
 // /lists/$listId returns zero rows under RLS → a "list not found" state (KTD4).
 
 import { useEffect, useMemo, useState } from 'react'
-import { getRouteApi } from '@tanstack/react-router'
-import { Trash2 } from 'lucide-react'
+import { getRouteApi, Link } from '@tanstack/react-router'
+import { Telescope, Trash2 } from 'lucide-react'
+import { catalogNavTargetForList } from '../catalog/catalogNav'
 import { toast } from 'sonner'
 import { useAuth } from '../auth/AuthProvider'
 import { boardByLayoutId } from '../board/boards'
@@ -130,9 +131,23 @@ export function ListDetailScreen() {
   }
 
   const header = list && (
-    <div className="mb-3 px-1">
-      <h1 className="text-lg font-bold tracking-tight">{list.name}</h1>
-      <p className="text-xs text-muted-foreground">{boardShortLabel(board?.name ?? '')}</p>
+    <div className="mb-3 flex items-start justify-between gap-2 px-1">
+      <div className="min-w-0">
+        <h1 className="text-lg font-bold tracking-tight">{list.name}</h1>
+        <p className="text-xs text-muted-foreground">{boardShortLabel(board?.name ?? '')}</p>
+      </div>
+      {/* "Show in catalog" bridge (R3.2/R7): browse this list in the catalog with its
+          grade/angle/hold-set tooling. Only when the board is known (needed for the target). */}
+      {board && (
+        <Link
+          {...catalogNavTargetForList(board, listId)}
+          aria-label="Show this list in the catalog"
+          className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-md border border-border px-2.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+        >
+          <Telescope aria-hidden className="size-4" />
+          Show in catalog
+        </Link>
+      )}
     </div>
   )
 

@@ -130,6 +130,14 @@ describe('ListDetailScreen', () => {
     expect(screen.getByText('Twentyfive')).toBeInTheDocument()
   })
 
+  it('has a "Show in catalog" link to the list-filtered catalog on the list’s board', async () => {
+    renderWithRouter('/lists/list-1')
+    const link = await screen.findByRole('link', { name: 'Show this list in the catalog' })
+    // The list is bound to board 5, filtered to this list id.
+    expect(link.getAttribute('href')).toContain('/board/5/catalog')
+    expect(link.getAttribute('href')).toContain('list=list-1')
+  })
+
   it('the angle filter narrows the shown problems; All shows every angle', async () => {
     renderWithRouter('/lists/list-1')
     await screen.findByText('Forty')

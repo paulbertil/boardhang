@@ -25,6 +25,7 @@ import { recordOpened } from './lastOpenedStore'
 import { useFavorites } from './favoritesStore'
 import { LogAscentSheet, type LogTarget } from '../logbook/LogAscentSheet'
 import { useAddToList } from '../lists/useAddToList'
+import { BetaVideos } from '../beta/BetaVideos'
 import { Button } from '@/components/ui/button'
 
 interface ProblemDetailProps {
@@ -299,6 +300,8 @@ export function ProblemDetail({
           Log ascent
         </Button>
       </div>
+
+      <BetaVideos sourceCatalogId={currentId} />
 
       <LogAscentSheet
         open={logOpen}

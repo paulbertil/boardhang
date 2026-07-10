@@ -26,12 +26,3 @@ export function catalogNavTarget(board: CatalogBoardDef) {
     },
   }
 }
-
-/** The "Show in catalog" bridge target (R3.2/R7): the board's catalog filtered to a single
- *  saved list. The list set is REPLACED by this one id; every other facet stays whatever the
- *  board's seed hydrates (catalogNavTarget), so grade/angle/etc. are preserved, not merged
- *  into an invisible existing list selection. */
-export function catalogNavTargetForList(board: CatalogBoardDef, listId: string) {
-  const target = catalogNavTarget(board)
-  return { ...target, search: { ...target.search, list: listId } }
-}

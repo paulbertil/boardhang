@@ -13,8 +13,9 @@ date: 2026-07-10
 > `ce-plan` added the HOW: Key Technical Decisions, Implementation Units, Verification Contract,
 > and Definition of Done.
 >
-> **Product Contract preservation:** Product Contract unchanged (R1–R7, KTD1–9, defaults,
-> non-goals, success signals carried verbatim). Planning discovered no conflict with product
+> **Product Contract preservation:** Product Contract (R1–R6, KTD1–9, defaults, non-goals,
+> success signals) carried from the brainstorm; R7 and the "Show in search" bridge (R3's former
+> second entry point) were later cut during build. Planning discovered no conflict with product
 > intent; the brainstorm's Outstanding Questions OQ1–OQ4 are HOW details now resolved in Key
 > Technical Decisions.
 
@@ -86,16 +87,13 @@ date: 2026-07-10
   catalog shows problems that are in **any** selected list (**union** of member sets). AND
   (intersection) is a non-goal. The list facet as a whole **ANDs** with all other facets — i.e.
   the result is `(in any selected list) AND (matches grade) AND (favorited) AND …`.
-- **R3 — Two entry points, one shared state.** Both write the **same** URL param, so the state
-  is identical however it was set:
-  1. **Catalog filter surfaces:** a **"Lists" control** in the header pill bar (pressed when a
-     list filter is active) opens a **multi-select picker** of the user's lists **for the current
-     board**, **and** the filter bottom sheet carries a **"Saved lists"** section with one
-     multi-select pill per list — both drive the same `listFilter`, hidden when the board has no
-     lists.
-  2. **List-detail bridge:** the `ListDetailScreen` header gains a **"Show in catalog"** action
-     that deep-links into the catalog with that list applied. (An earlier revision also put it on
-     the `/lists` cards; removed to keep the card action row to rename/delete.)
+- **R3 — Two catalog filter surfaces, one shared state.** Both write the **same** `listFilter` /
+  URL param: a **"Lists" control** in the header pill bar (pressed when a list filter is active)
+  opens a **multi-select picker** of the user's lists **for the current board**, **and** the
+  filter bottom sheet carries a **"Saved lists"** section with one multi-select pill per list.
+  Hidden when the board has no lists. (An earlier revision added a "Show in catalog" bridge from
+  the Lists screen/detail as a second entry point; removed — the filter lives entirely in the
+  catalog.)
 - **R4 — Hidden when there's nothing to pick.** The "Lists" control appears **only** when the
   signed-in user has **≥1 list for the current board**. When signed out, or signed in with no
   lists for this board, the control is **absent** (no disabled/empty state — matches the app's
@@ -112,12 +110,8 @@ date: 2026-07-10
   **not** rendered as individual removable chips in the pill bar — the control is the single
   affordance. (An earlier revision showed one removable chip per list; dropped as redundant with
   the always-present, discoverable control.)
-- **R7 — "Show in catalog" **replaces** the list set.** Triggering the bridge (R3.2) from the
-  Lists screen sets the catalog's list filter to **just that list**, because from the Lists
-  screen the user cannot see the catalog's current list filter, so OR-ing into an invisible set
-  would surprise. **Other facets (grade, angle, hold-set, search, favorites) are preserved** —
-  only the list set is replaced. Additive OR lives only where it is visible: the in-catalog
-  picker (R3.1).
+- **R7 — (removed)** — was the "Show in catalog" bridge's replace-vs-merge semantics; the bridge
+  was cut, so this requirement no longer applies.
 
 ### Behavior & consistency (stated defaults — resolved in the grill)
 
@@ -220,12 +214,7 @@ date: 2026-07-10
   through the existing `setFilters` path **immediately** — the catalog updates **live behind the
   open sheet**, mirroring `AddToListSheet` and the pill bar's other instant-apply controls. There
   is **no** separate confirm/Apply gesture.
-- **TD8 — Bridge is a fresh navigation with `list` only.** "Show in catalog" navigates to
-  `/board/$layoutId/catalog` with search `{ list: thatId }` (a single id — the `list` param is a
-  CSV **string**, not an array, per TD3; one id needs no join) and no other facet params; the
-  remaining facets hydrate from that board+angle's seed via the normal cold-launch/route path, so
-  R7's "replace the list set, preserve other facets" holds without the Lists screen needing to
-  know the catalog's current facets.
+- **TD8 — (removed)** — was the "Show in catalog" bridge navigation; the bridge was cut.
 
 ---
 
@@ -346,7 +335,7 @@ date: 2026-07-10
   - **Cold-launch deep-link survives (the P1 regression guard):** mount with `list=<validId>`
     while `useSavedLists().status` is `loading` → **no** prune, **no** URL rewrite, grid shows all
     (fail-open); after the store resolves to `loaded` containing that id → membership applies and
-    the `list=` param is retained. Covers R5/R3.2.
+    the `list=` param is retained. Covers R5.
   - `loadLists()` is invoked on mount (cached-first), mirroring `AddToListSheet`.
   - After `loaded`: `list` param with one id matching a live board list → `FilterContext`
     populated, `listMembersReady` true.
@@ -362,10 +351,10 @@ date: 2026-07-10
 
 ### U4. Pill-bar "Lists" control + picker sheet (+ filter-sheet section)
 
-- **Goal:** The in-catalog entry point (R3.1): a "Lists" control opening a multi-select of the
+- **Goal:** The in-catalog entry point (R3): a "Lists" control opening a multi-select of the
   board's lists, plus a "Saved lists" section in the filter bottom sheet driving the same
   `listFilter`.
-- **Requirements:** R3.1, R4, R6, KTD7, KTD8, TD6, TD7.
+- **Requirements:** R3, R4, R6, KTD7, KTD8, TD6, TD7.
 - **Dependencies:** U1 (for `listFilter` + `setFilters`); U3 (for `loadLists`, `boardLists` +
   pruned set + the new `FilterPillBar` prop).
 - **Files:**
@@ -400,31 +389,10 @@ date: 2026-07-10
   reopening the "Lists" control (or the sheet section) edits/clears the set; no "Lists" control on a
   board with no lists.
 
-### U5. "Show in catalog" bridge from list detail
+### U5. (removed) — "Show in catalog" bridge from list detail
 
-- **Goal:** The second entry point (R3.2/R7): jump from a list into the catalog pre-filtered to
-  just that list.
-- **Requirements:** R3.2, R7, TD8.
-- **Dependencies:** U1 (the `list` param must exist).
-- **Files:**
-  - `web/src/lists/ListDetailScreen.tsx` — a "Show in catalog" action in the detail header,
-    linking to `/board/$layoutId/catalog` with search `{ list: listId }` (a single id string, per
-    TD8 — not an array). (Not on the `/lists` cards — those keep just rename/delete.)
-  - `web/src/lists/ListDetailScreen.test.tsx` — extend.
-- **Approach:** Use the list's own `boardLayoutId` for the route param and set only the `list`
-  search param (single id string); all other facets hydrate from that board's seed (TD8).
-  Navigation **replaces** the list set, preserving other facets by construction.
-- **Patterns to follow:** existing TanStack Router `Link`/`navigate` usage into
-  `/board/$layoutId/catalog`; the catalog route's `validateSearch`.
-- **Test scenarios:**
-  - Triggering "Show in catalog" for a list navigates to that list's board catalog with
-    `list=<id>` in the search.
-  - The action targets the **list's** board, not the currently-viewed board (a list bound to
-    another board routes to its own board).
-  - The navigation sets only `list` (other facet params absent → hydrate from seed), satisfying
-    R7's "preserve other facets, replace list set".
-- **Verification:** From a list, "Show in catalog" lands in the catalog showing only that list's
-  problems, with any previously-seeded grade/angle intact.
+Cut from scope: the filter is reachable only from the catalog (R3). No `ListDetailScreen`
+navigation action, and `catalogNav.ts` carries no `catalogNavTargetForList` helper.
 
 ---
 
@@ -449,14 +417,12 @@ Gates for the whole change (run before PR):
      lists, reload → that stale id dropped, URL self-heals.
   5. Signed out (or a board with no lists) → no "Lists" control; a `list=` deep-link opens
      unfiltered.
-  6. From the Lists screen, "Show in catalog" → catalog filtered to just that list, other facets
-     intact.
 
 ---
 
 ## Definition of Done
 
-- R1–R7 satisfied; the six browser-smoke flows above pass.
+- R1–R6 satisfied (R7 removed with the bridge); the five browser-smoke flows above pass.
 - All Verification Contract gates green (build, lint, vitest).
 - No `supabase/migrations/**` change (TD1); `ascents`/`list_problems` RLS untouched.
 - `docs/navigation-and-ui-flows.md` documents the `list` catalog param (same PR, doc discipline).
@@ -467,8 +433,6 @@ Gates for the whole change (run before PR):
 
 ## Open Questions (deferred to implementation)
 
-- **Bridge styling.** The "Show in catalog" affordance lives on the `ListDetailScreen` header
-  (R3.2/U5); only its exact styling is a build detail.
 - **Batch membership read shape.** Whether `useListMemberIds` loops `readListProblems` or a new
   `listsSync` batch helper reads cleaner (TD5) — an execution-time call once the real IndexedDB
   read is in front of the implementer.
@@ -498,8 +462,8 @@ Gates for the whole change (run before PR):
   under grade/angle/hold-set. The "Lists" control reads pressed while a filter is active.
 - Signed out (or with no lists for this board), the "Lists" control is **absent**; a shared
   `list=` deep-link that can't resolve opens the catalog unfiltered rather than erroring.
-- From the Lists screen, "Show in catalog" opens the catalog filtered to **just** that list,
-  preserving any existing grade/angle filters.
+- The filter is also editable from the filter bottom sheet's "Saved lists" pill section (same
+  `listFilter`), and the picker's "Clear all" empties it.
 - Reopening the board (cold launch) **resumes** the last list filter from the seed; a list deleted
   meanwhile is silently dropped and the catalog opens without it.
 - Removing a problem from a currently-filtered list makes it disappear from the catalog grid

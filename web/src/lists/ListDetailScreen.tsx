@@ -5,15 +5,8 @@
 // /lists/$listId returns zero rows under RLS → a "list not found" state (KTD4).
 
 import { useEffect, useMemo, useState } from 'react'
-import { getRouteApi, useNavigate } from '@tanstack/react-router'
-import { MoreVertical, Search, Trash2 } from 'lucide-react'
-import { catalogNavTargetForList } from '../catalog/catalogNav'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
+import { getRouteApi } from '@tanstack/react-router'
+import { Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAuth } from '../auth/AuthProvider'
 import { boardByLayoutId } from '../board/boards'
@@ -36,7 +29,6 @@ const routeApi = getRouteApi('/lists/$listId')
 
 export function ListDetailScreen() {
   const { listId } = routeApi.useParams()
-  const navigate = useNavigate()
   const { status, isRestoring } = useAuth()
   const { status: dataStatus, lists } = useSavedLists()
   const signedIn = status !== 'signedOut'
@@ -138,31 +130,9 @@ export function ListDetailScreen() {
   }
 
   const header = list && (
-    <div className="mb-3 flex items-start justify-between gap-2 px-1">
-      <div className="min-w-0">
-        <h1 className="text-lg font-bold tracking-tight">{list.name}</h1>
-        <p className="text-xs text-muted-foreground">{boardShortLabel(board?.name ?? '')}</p>
-      </div>
-      {/* Overflow menu for list-level actions. Today just the "Show in catalog" bridge
-          (R3.2/R7) — browse this list in the catalog with its grade/angle/hold-set tooling. Kept
-          as a menu so more list actions can join without crowding the header. */}
-      {board && (
-        <DropdownMenu>
-          <DropdownMenuTrigger
-            render={<Button variant="ghost" size="icon-sm" aria-label="List actions" className="shrink-0" />}
-          >
-            <MoreVertical className="size-4" />
-          </DropdownMenuTrigger>
-          {/* w-auto: the default content width tracks the (tiny icon) trigger, which would wrap
-              the label — size to content instead (min-w-32 stays as a floor). */}
-          <DropdownMenuContent align="end" className="w-auto">
-            <DropdownMenuItem onClick={() => void navigate(catalogNavTargetForList(board, listId))}>
-              <Search />
-              Show in search
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      )}
+    <div className="mb-3 px-1">
+      <h1 className="text-lg font-bold tracking-tight">{list.name}</h1>
+      <p className="text-xs text-muted-foreground">{boardShortLabel(board?.name ?? '')}</p>
     </div>
   )
 

@@ -45,10 +45,20 @@ run_case() {
 
   echo "→ granting public-table access to anon/authenticated (mirrors Supabase defaults)…"
   "${psql_in[@]}" <<'SQL'
-grant select, insert, update, delete on public.logbook_imports to anon, authenticated;
-grant select, insert, update, delete on public.profiles        to anon, authenticated;
-grant select, insert, update, delete on storage.objects        to anon, authenticated;
+grant select, insert, update, delete on public.profiles to anon, authenticated;
+grant select, insert, update, delete on storage.objects to anon, authenticated;
 grant select on storage.buckets to anon, authenticated;
+-- Grant migration-created public tables only when the applied chain created them, so a
+-- single-migration case (e.g. 0010 alone) doesn't fail granting a table it never made.
+do $$
+begin
+  if to_regclass('public.logbook_imports') is not null then
+    execute 'grant select, insert, update, delete on public.logbook_imports to anon, authenticated';
+  end if;
+  if to_regclass('public.problem_beta_videos') is not null then
+    execute 'grant select, insert, update, delete on public.problem_beta_videos to anon, authenticated';
+  end if;
+end $$;
 SQL
 
   echo "→ running RLS assertions…"
@@ -66,5 +76,9 @@ run_case "$HERE/0008_logbook_imports_rls.sql" "$HERE/../0008_logbook_imports.sql
 # 0009: avatars bucket + avatar_url CHECK + extended delete_user(). Needs the 0008 → 0009
 # chain so the final delete_user() (both sweeps) and both buckets exist.
 run_case "$HERE/0009_avatars_rls.sql" "$HERE/../0008_logbook_imports.sql" "$HERE/../0009_avatars.sql"
+
+# 0010: beta videos — public approved-only read + Phase-1 write-closed + partial dedupe index.
+# Independent of the logbook/avatars chain, so it applies alone.
+run_case "$HERE/0010_problem_beta_videos_rls.sql" "$HERE/../0010_problem_beta_videos.sql"
 
 echo "✅ ALL RLS CASES PASSED"

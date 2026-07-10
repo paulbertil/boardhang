@@ -6,7 +6,7 @@
 // the single useSlab and derives the filter context (favorites + installed-hold-set
 // climbable check).
 
-import { useEffect, useMemo } from 'react'
+import { useCallback, useEffect, useMemo } from 'react'
 import { createPortal } from 'react-dom'
 import { Loader2 } from 'lucide-react'
 import { getRouteApi } from '@tanstack/react-router'
@@ -30,6 +30,8 @@ import { applyFilters, type FilterContext, type FilterState } from './filters'
 import { filtersToSearch, searchToFilters } from './catalogSearch'
 import { saveSeed } from './filterSeed'
 import { useFavorites } from './favoritesStore'
+import { loadLists, useSavedLists } from '../lists/listsStore'
+import { useListMemberIds } from '../lists/useListMemberIds'
 import { useSlab } from './useSlab'
 import { useProblemDrawer } from './useProblemDrawer'
 import { useEnsureAscentsLoaded } from '../logbook/ascents'
@@ -114,10 +116,56 @@ export function CatalogScreen() {
 
   // Persist filter changes to the URL (source of truth) and write them through to the
   // cold-launch seed. filtersToSearch omits angle/problem, so spreading preserves them.
-  const setFilters = (next: FilterState) => {
-    saveSeed(board.layoutId, angle, next)
-    void navigate({ search: (prev) => ({ ...prev, ...filtersToSearch(next) }), replace: true })
-  }
+  const setFilters = useCallback(
+    (next: FilterState) => {
+      saveSeed(board.layoutId, angle, next)
+      void navigate({ search: (prev) => ({ ...prev, ...filtersToSearch(next) }), replace: true })
+    },
+    [board.layoutId, angle, navigate],
+  )
+
+  // ── Saved-list filter (board-scoped) ─────────────────────────────────────────
+  // Warm the lists store on mount: nothing else on the catalog surface calls loadLists
+  // (AddToListSheet does it on open), so without this a valid ?list= deep-link would resolve
+  // against an empty store. Cached-first: instant from IndexedDB when warm, one pull when cold.
+  useEffect(() => {
+    if (signedIn) void loadLists()
+  }, [signedIn])
+
+  const { status: listsStatus, lists: savedLists } = useSavedLists()
+  const listsLoaded = listsStatus === 'loaded'
+  // This board's lists (a list binds one board), mirroring AddToListSheet's scoping.
+  const boardLists = useMemo(
+    () => savedLists.filter((l) => l.boardLayoutId === board.layoutId),
+    [savedLists, board.layoutId],
+  )
+  const boardListIds = useMemo(() => new Set(boardLists.map((l) => l.id)), [boardLists])
+  // Prune the URL's list ids to the board's live lists — but ONLY once lists have loaded, so a
+  // valid ?list= deep-link isn't stripped against a still-empty store on a cold launch (R5/TD4).
+  // While idle/loading the raw filter is kept verbatim and the facet is a no-op via
+  // listMembersReady (below), so nothing is dropped and the grid isn't blanked mid-load.
+  const listFilter = useMemo(
+    () => (listsLoaded ? filters.listFilter.filter((id) => boardListIds.has(id)) : filters.listFilter),
+    [listsLoaded, filters.listFilter, boardListIds],
+  )
+  // Self-heal the URL when a loaded prune actually dropped an id (deleted / foreign-board /
+  // signed-out). Pruning only ever removes ids, so a length delta is a sound "changed" signal.
+  useEffect(() => {
+    if (listsLoaded && listFilter.length !== filters.listFilter.length) {
+      setFilters({ ...filters, listFilter })
+    }
+  }, [listsLoaded, listFilter, filters, setFilters])
+  const { ids: listMemberIds, ready: memberIdsReady } = useListMemberIds(listFilter)
+  // The list predicate only applies once the lists store is loaded AND the membership read
+  // has resolved. Gating on `listsLoaded` is load-bearing: `memberIdsReady` alone flips true
+  // as soon as an IndexedDB read resolves — even against an empty/cleared cache (signed out,
+  // or before the cold pull) — which would blank the grid for a selected-but-unresolved list.
+  // Until both hold, the facet fails OPEN (shows everything) rather than to zero.
+  const listMembersReady = listsLoaded && memberIdsReady
+  // Filter on the PRUNED ids, not the raw URL value: a fully-pruned set (every id stale/foreign)
+  // is a no-op immediately, so an unresolvable ?list= deep-link never flashes an empty grid in
+  // the render before the self-heal effect rewrites the URL.
+  const effectiveFilters = useMemo<FilterState>(() => ({ ...filters, listFilter }), [filters, listFilter])
 
   // The slab's actual grade span (ordinal) for the slider. (The Method filter uses a
   // fixed label list, not slab-derived — see FilterControls / METHOD_LABELS.)
@@ -134,6 +182,8 @@ export function CatalogScreen() {
     const { membership, active } = holdSetContext(board.membershipResource, activeHoldSetsRaw)
     return {
       favoriteIds,
+      listMemberIds,
+      listMembersReady,
       isClimbable: (holds) => isClimbable(membership, holds, active),
       sentIds,
       loggedIds,
@@ -152,6 +202,8 @@ export function CatalogScreen() {
   }, [
     board,
     favoriteIds,
+    listMemberIds,
+    listMembersReady,
     activeHoldSetsRaw,
     sentIds,
     loggedIds,
@@ -164,8 +216,8 @@ export function CatalogScreen() {
   ])
 
   const transform = useMemo(
-    () => (list: CatalogProblem[]) => applyFilters(list, filters, context),
-    [filters, context],
+    () => (list: CatalogProblem[]) => applyFilters(list, effectiveFilters, context),
+    [effectiveFilters, context],
   )
   const displayed = useMemo(() => transform(problems), [transform, problems])
 
@@ -222,6 +274,7 @@ export function CatalogScreen() {
             onChange={setFilters}
             inSession={sessionForBoard !== null}
             statusReady={statusReady}
+            boardLists={boardLists}
           />,
           headerFilterSlot,
         )}
@@ -254,7 +307,7 @@ export function CatalogScreen() {
       <div className="pointer-events-none sticky bottom-4 z-30 mt-auto h-0">
         <div className="absolute bottom-0 right-0 flex flex-col items-end gap-3">
           <RecentsSheet board={board} angle={angle} problems={problems} favoriteIds={favoriteIds} sentIds={sentIds} onSelect={openRecent} />
-          <FilterSheet state={filters} onChange={setFilters} board={board} gradeSpan={gradeSpan} statusReady={statusReady} signedOut={signedOut} />
+          <FilterSheet state={filters} onChange={setFilters} board={board} gradeSpan={gradeSpan} statusReady={statusReady} signedOut={signedOut} boardLists={boardLists} />
         </div>
       </div>
 

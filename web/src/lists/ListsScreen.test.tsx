@@ -98,15 +98,6 @@ describe('ListsScreen', () => {
     expect(names).toEqual(['Newer', 'Older'])
   })
 
-  it('each row has a "Show in catalog" link to that list-filtered catalog on its board', async () => {
-    storeState = { status: 'loaded', lists: [savedList('a', 'Projects', '2026-07-06T01:00:00Z')], error: null }
-    renderWithRouter('/lists')
-    const link = await screen.findByRole('link', { name: 'Show Projects in the catalog' })
-    // Board 7's catalog, filtered to just this list id.
-    expect(link.getAttribute('href')).toContain('/board/7/catalog')
-    expect(link.getAttribute('href')).toContain('list=a')
-  })
-
   it('loaded with zero rows: shows the create-first-list empty state', async () => {
     storeState = { status: 'loaded', lists: [], error: null }
     renderWithRouter('/lists')

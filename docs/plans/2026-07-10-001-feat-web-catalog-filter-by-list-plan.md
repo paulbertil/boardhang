@@ -93,8 +93,9 @@ date: 2026-07-10
      board**, **and** the filter bottom sheet carries a **"Saved lists"** section with one
      multi-select pill per list — both drive the same `listFilter`, hidden when the board has no
      lists.
-  2. **Lists screen bridge:** list cards and `ListDetailScreen` gain a **"Show in catalog"**
-     action that deep-links into the catalog with that list applied.
+  2. **List-detail bridge:** the `ListDetailScreen` header gains a **"Show in catalog"** action
+     that deep-links into the catalog with that list applied. (An earlier revision also put it on
+     the `/lists` cards; removed to keep the card action row to rename/delete.)
 - **R4 — Hidden when there's nothing to pick.** The "Lists" control appears **only** when the
   signed-in user has **≥1 list for the current board**. When signed out, or signed in with no
   lists for this board, the control is **absent** (no disabled/empty state — matches the app's
@@ -399,23 +400,20 @@ date: 2026-07-10
   reopening the "Lists" control (or the sheet section) edits/clears the set; no "Lists" control on a
   board with no lists.
 
-### U5. "Show in catalog" bridge from the Lists screen
+### U5. "Show in catalog" bridge from list detail
 
 - **Goal:** The second entry point (R3.2/R7): jump from a list into the catalog pre-filtered to
   just that list.
 - **Requirements:** R3.2, R7, TD8.
 - **Dependencies:** U1 (the `list` param must exist).
 - **Files:**
-  - `web/src/lists/ListsScreen.tsx` **and** `web/src/lists/ListDetailScreen.tsx` — a "Show in
-    catalog" action on **both** the list card (ListsScreen) and the detail header
-    (ListDetailScreen), per R3.2, linking to `/board/$layoutId/catalog` with search
-    `{ list: listId }` (a single id string, per TD8 — not an array).
-  - `web/src/lists/ListsScreen.test.tsx` **and** `web/src/lists/ListDetailScreen.test.tsx` —
-    extend.
+  - `web/src/lists/ListDetailScreen.tsx` — a "Show in catalog" action in the detail header,
+    linking to `/board/$layoutId/catalog` with search `{ list: listId }` (a single id string, per
+    TD8 — not an array). (Not on the `/lists` cards — those keep just rename/delete.)
+  - `web/src/lists/ListDetailScreen.test.tsx` — extend.
 - **Approach:** Use the list's own `boardLayoutId` for the route param and set only the `list`
   search param (single id string); all other facets hydrate from that board's seed (TD8).
-  Navigation **replaces** the list set, preserving other facets by construction. Both surfaces are
-  required (R3.2); only their exact placement/styling is a build detail — see Open Questions.
+  Navigation **replaces** the list set, preserving other facets by construction.
 - **Patterns to follow:** existing TanStack Router `Link`/`navigate` usage into
   `/board/$layoutId/catalog`; the catalog route's `validateSearch`.
 - **Test scenarios:**
@@ -469,9 +467,8 @@ Gates for the whole change (run before PR):
 
 ## Open Questions (deferred to implementation)
 
-- **Bridge placement/styling.** Both surfaces are required (card + detail, R3.2/U5) — only the
-  exact placement and styling of each "Show in catalog" affordance is open; confirm against the
-  existing list action affordances at build. (Not a surface-count decision.)
+- **Bridge styling.** The "Show in catalog" affordance lives on the `ListDetailScreen` header
+  (R3.2/U5); only its exact styling is a build detail.
 - **Batch membership read shape.** Whether `useListMemberIds` loops `readListProblems` or a new
   `listsSync` batch helper reads cleaner (TD5) — an execution-time call once the real IndexedDB
   read is in front of the implementer.

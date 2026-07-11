@@ -35,3 +35,6 @@ __pycache__/
 
 # Local catalog table backups (backup_catalog_problems.py) — never commit these
 catalog_problems_backup_*.json
+
+# Beta-seed sidecar: matched rows saved before write (zero-quota reinsert via --from-file)
+catalog-data/.beta_matches_*.json

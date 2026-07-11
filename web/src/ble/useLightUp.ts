@@ -1,11 +1,14 @@
 // The "light up this problem's holds over BLE" interaction, extracted from ProblemDetail
 // so both the detail drawer and the catalog last-opened bar can reuse it. Connects the
 // board first when disconnected, then sends the mapped hold assignments; tracks the
-// connecting/sending phase, a lit flag, and the last error. `lit` resets whenever the
-// target problem changes (resetKey) or the board disconnects.
+// connecting/sending phase and a lit flag. A send failure is surfaced here as a toast
+// (both consumers are too slim for inline error text). `lit` resets whenever the target
+// problem changes (resetKey) or the board disconnects.
 
 import { useEffect, useState } from 'react'
+import { toast } from 'sonner'
 import { bleClient, connectBoard, isConnected, setBleError, useBle } from './useBle'
+import { describeBleError } from './moonboard'
 import { getFlipped } from '../board/boardStore'
 import type { CatalogBoardDef } from '../board/boards'
 import type { CatalogHold } from '../catalog/catalogSync'
@@ -23,7 +26,6 @@ interface UseLightUpResult {
   /** True once a send has completed for the current target; reset on target/disconnect. */
   lit: boolean
   busy: LightUpBusy
-  error: string | null
   /** The live BLE connection state (for label/affordance decisions). */
   state: ReturnType<typeof useBle>['state']
 }
@@ -32,7 +34,6 @@ interface UseLightUpResult {
 export function useLightUp(board: CatalogBoardDef, resetKey: string): UseLightUpResult {
   const { state } = useBle()
   const [lit, setLit] = useState(false)
-  const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState<LightUpBusy>(null)
 
   // A newly-targeted problem isn't lit yet; disconnecting clears the lit state.
@@ -43,7 +44,6 @@ export function useLightUp(board: CatalogBoardDef, resetKey: string): UseLightUp
 
   async function lightUp(holds: CatalogHold[]) {
     if (busy) return
-    setError(null)
     setBleError(null)
     if (!isConnected()) {
       setBusy('connecting')
@@ -62,11 +62,11 @@ export function useLightUp(board: CatalogBoardDef, resetKey: string): UseLightUp
       })
       setLit(true)
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err))
+      toast.error(describeBleError(err))
     } finally {
       setBusy(null)
     }
   }
 
-  return { lightUp, lit, busy, error, state }
+  return { lightUp, lit, busy, state }
 }

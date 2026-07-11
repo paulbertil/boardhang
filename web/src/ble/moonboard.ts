@@ -54,6 +54,50 @@ function getBluetooth(): Bluetooth {
 }
 
 /**
+ * Turn an unknown thrown/rejected BLE value into a message worth showing.
+ * Desktop Chrome rejects GATT failures as full-text Errors, but the iOS Bluefy
+ * shim can reject with a bare DOMException or a non-Error value — e.g. a numeric
+ * code that `String()`s to "2" — which is useless to the user. A real message
+ * contains letters; anything without (a bare code, empty string) falls back to a
+ * friendly, actionable line.
+ */
+export function describeBleError(err: unknown): string {
+  const raw =
+    err instanceof Error
+      ? err.message
+      : typeof err === 'object' && err !== null && 'message' in err
+        ? String((err as { message: unknown }).message)
+        : typeof err === 'string'
+          ? err
+          : ''
+  const msg = raw.trim()
+  if (/[a-z]/i.test(msg)) return msg
+  return "Couldn't reach the board — make sure it's on and in range, then try again."
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+/**
+ * writeValueWithoutResponse can transiently reject (GATT momentarily busy, a
+ * radio hiccup) even on a healthy connection. Retry once after a short beat
+ * before giving up; a genuine failure (disconnected, out of range) rejects again
+ * and propagates.
+ */
+async function writeWithRetry(
+  characteristic: BluetoothRemoteGATTCharacteristic,
+  chunk: BufferSource,
+): Promise<void> {
+  try {
+    await characteristic.writeValueWithoutResponse(chunk)
+  } catch {
+    await delay(120)
+    await characteristic.writeValueWithoutResponse(chunk)
+  }
+}
+
+/**
  * Stateful client wrapping a single board connection. Call `onStateChange` to
  * surface connection state to React.
  */
@@ -135,7 +179,7 @@ export class MoonBoardClient {
     for (let offset = 0; offset < bytes.length; offset += MAX_CHUNK_LENGTH) {
       // slice() copies into a fresh ArrayBuffer, satisfying BufferSource.
       const chunk = bytes.slice(offset, offset + MAX_CHUNK_LENGTH)
-      await characteristic.writeValueWithoutResponse(chunk)
+      await writeWithRetry(characteristic, chunk)
     }
   }
 }

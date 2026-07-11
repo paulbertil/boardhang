@@ -47,9 +47,12 @@ export function BetaPlayerSheet({ video, onClose }: { video: BetaVideo | null; o
       }}
     >
       {video && (
-        <DialogContent showCloseButton className="w-[min(100vw-2rem,26rem)] max-w-none overflow-hidden p-0">
+        <DialogContent showCloseButton className="flex max-h-[90dvh] w-[min(100vw-2rem,26rem)] max-w-none flex-col overflow-hidden p-0">
           <DialogTitle className="sr-only">Beta by {video.channel}</DialogTitle>
-          <div className="relative aspect-[9/16] w-full bg-black">
+          {/* aspect-[9/16] is the PREFERRED portrait shape; min-h-0 + shrink let the video give
+              back height when the 9:16 frame would exceed the 90dvh cap (e.g. a landscape clip
+              or a short screen), so the modal never grows past the viewport. */}
+          <div className="relative aspect-[9/16] w-full min-h-0 shrink bg-black">
             {!loaded && <Skeleton className="absolute inset-0 rounded-none" />}
             <iframe
               key={video.video_id}
@@ -61,7 +64,7 @@ export function BetaPlayerSheet({ video, onClose }: { video: BetaVideo | null; o
               className="absolute inset-0 size-full"
             />
           </div>
-          <div className="flex items-center justify-between gap-2 p-3">
+          <div className="flex shrink-0 items-center justify-between gap-2 p-3">
             <span className="min-w-0 truncate text-sm text-muted-foreground">{video.channel}</span>
             <a
               href={watchUrl(video)}

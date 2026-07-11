@@ -39,8 +39,8 @@ Examples
   YOUTUBE_API_KEY=… SUPABASE_URL=… SUPABASE_SERVICE_ROLE_KEY=… \
       python3 scripts/seed_beta_videos.py --board mini2025 --limit 100
 
-  # dry run (no Supabase writes, no key needed) to preview matches:
-  YOUTUBE_API_KEY=… python3 scripts/seed_beta_videos.py --board mini2025 --limit 20 --dry-run
+  # dry run (offline: no YouTube calls, no quota, no keys) — preview WHICH benchmarks run:
+  python3 scripts/seed_beta_videos.py --board mini2025 --limit 20 --dry-run
 
   # re-validate stored clips and soft-delete dead ones (freshness / seed-rot cleanup):
   SUPABASE_URL=… SUPABASE_SERVICE_ROLE_KEY=… YOUTUBE_API_KEY=… \
@@ -187,10 +187,25 @@ def run_seed(args, yt_key, base_url, sb_key):
     benchmarks = [p for p in json.load(open(path))["problems"] if p.get("isBenchmark")]
     benchmarks.sort(key=lambda p: p.get("repeats", 0), reverse=True)
 
-    done = set() if args.dry_run else seeded_ids(base_url, sb_key)
+    # A real run always reads the seeded checkpoint. A dry run reads it too WHEN Supabase creds
+    # are present (so the preview reflects the true next batch), but falls back to the full list
+    # when they're absent — keeping dry-run usable with no keys at all.
+    read_db = bool(base_url and sb_key)  # a dry run with no creds skips the DB read entirely
+    done = seeded_ids(base_url, sb_key) if (read_db or not args.dry_run) else set()
     todo = [p for p in benchmarks if p["id"] not in done][:args.limit]
     print(f"{args.board} @{args.angle}°: {len(benchmarks)} benchmarks, "
           f"{len(done)} already seeded → processing next {len(todo)} (limit {args.limit})")
+
+    if args.dry_run:
+        # Offline preview — no YouTube calls (so zero quota) and no writes. Shows WHICH benchmarks
+        # would be fetched, most-repeated first; can't show real video matches without the API.
+        note = ("already-seeded excluded via DB" if read_db
+                else "no DB creds → not excluding already-seeded")
+        print(f"[dry-run] would fetch YouTube betas for these benchmarks "
+              f"(no API calls, no quota, no writes; {note}):")
+        for i, p in enumerate(todo, 1):
+            print(f"  {i:>3}. {p.get('repeats', 0):>5}×  {(p.get('name') or '')[:50]}")
+        return
 
     rows, approved, pending, missed = [], 0, 0, 0
     try:
@@ -276,8 +291,9 @@ def main():
     args = ap.parse_args()
 
     yt_key = os.environ.get("YOUTUBE_API_KEY")
-    if not yt_key:
-        sys.exit("Set YOUTUBE_API_KEY in the environment.")
+    if not yt_key and not args.dry_run:
+        # A dry run is offline (no YouTube calls), so it needs no key.
+        sys.exit("Set YOUTUBE_API_KEY in the environment (or pass --dry-run).")
     base_url = (os.environ.get("SUPABASE_URL") or "").rstrip("/")
     sb_key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
     if not args.dry_run and (not base_url or not sb_key):

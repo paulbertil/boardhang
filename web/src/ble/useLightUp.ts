@@ -5,7 +5,7 @@
 // (both consumers are too slim for inline error text). `lit` resets whenever the target
 // problem changes (resetKey) or the board disconnects.
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { bleClient, connectBoard, isConnected, setBleError, useBle } from './useBle'
 import { describeBleError } from './moonboard'
@@ -36,6 +36,15 @@ export function useLightUp(board: CatalogBoardDef, resetKey: string): UseLightUp
   const [lit, setLit] = useState(false)
   const [busy, setBusy] = useState<LightUpBusy>(null)
 
+  // The target the hook currently points at. A send is async and the hook stays
+  // mounted across target swaps (the pager, the last-opened bar), so we capture
+  // this at send time and drop any result that resolves after the target changed —
+  // otherwise a stale send lights the wrong problem or toasts on the wrong screen.
+  const targetRef = useRef(resetKey)
+  useEffect(() => {
+    targetRef.current = resetKey
+  }, [resetKey])
+
   // A newly-targeted problem isn't lit yet; disconnecting clears the lit state.
   useEffect(() => setLit(false), [resetKey])
   useEffect(() => {
@@ -45,6 +54,7 @@ export function useLightUp(board: CatalogBoardDef, resetKey: string): UseLightUp
   async function lightUp(holds: CatalogHold[]) {
     if (busy) return
     setBleError(null)
+    const target = resetKey
     if (!isConnected()) {
       setBusy('connecting')
       await connectBoard()
@@ -60,9 +70,9 @@ export function useLightUp(board: CatalogBoardDef, resetKey: string): UseLightUp
         flipped: getFlipped(board.layoutId),
         showBeta: true,
       })
-      setLit(true)
+      if (targetRef.current === target) setLit(true)
     } catch (err) {
-      toast.error(describeBleError(err))
+      if (targetRef.current === target) toast.error(describeBleError(err))
     } finally {
       setBusy(null)
     }

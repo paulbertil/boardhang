@@ -75,4 +75,52 @@ describe('useLightUp', () => {
     )
     expect(result.current.lit).toBe(false)
   })
+
+  it('drops a send that resolves after the target changed (no stale lit)', async () => {
+    vi.mocked(ble.useBle).mockReturnValue({ state: 'connected', deviceName: 'MB', error: null })
+    vi.mocked(ble.isConnected).mockReturnValue(true)
+    let resolveSend!: () => void
+    vi.mocked(ble.bleClient.send).mockReturnValueOnce(
+      new Promise<void>((res) => {
+        resolveSend = res
+      }),
+    )
+    const { result, rerender } = renderHook(({ key }) => useLightUp(board, key), {
+      initialProps: { key: 'a' },
+    })
+    let pending!: Promise<void>
+    act(() => {
+      pending = result.current.lightUp(holds)
+    })
+    rerender({ key: 'b' }) // user swiped to another problem mid-send
+    await act(async () => {
+      resolveSend()
+      await pending
+    })
+    expect(result.current.lit).toBe(false)
+  })
+
+  it('does not toast a stale send failure after the target changed', async () => {
+    vi.mocked(ble.useBle).mockReturnValue({ state: 'connected', deviceName: 'MB', error: null })
+    vi.mocked(ble.isConnected).mockReturnValue(true)
+    let rejectSend!: () => void
+    vi.mocked(ble.bleClient.send).mockReturnValueOnce(
+      new Promise<void>((_, rej) => {
+        rejectSend = () => rej(new Error('write failed'))
+      }),
+    )
+    const { result, rerender } = renderHook(({ key }) => useLightUp(board, key), {
+      initialProps: { key: 'a' },
+    })
+    let pending!: Promise<void>
+    act(() => {
+      pending = result.current.lightUp(holds)
+    })
+    rerender({ key: 'b' })
+    await act(async () => {
+      rejectSend()
+      await pending
+    })
+    expect(toast.error).not.toHaveBeenCalled()
+  })
 })

@@ -57,9 +57,11 @@ function getBluetooth(): Bluetooth {
  * Turn an unknown thrown/rejected BLE value into a message worth showing.
  * Desktop Chrome rejects GATT failures as full-text Errors, but the iOS Bluefy
  * shim can reject with a bare DOMException or a non-Error value — e.g. a numeric
- * code that `String()`s to "2" — which is useless to the user. A real message
- * contains letters; anything without (a bare code, empty string) falls back to a
- * friendly, actionable line.
+ * code that `String()`s to "2" — which is useless to the user. A message with real
+ * content passes through; a bare code or empty string falls back to a friendly,
+ * actionable line. "Real content" = anything that isn't only digits, whitespace,
+ * and punctuation — a Unicode-aware test so a localized (CJK/Cyrillic) message
+ * from a non-English system locale still surfaces instead of the English fallback.
  */
 export function describeBleError(err: unknown): string {
   const raw =
@@ -71,9 +73,12 @@ export function describeBleError(err: unknown): string {
           ? err
           : ''
   const msg = raw.trim()
-  if (/[a-z]/i.test(msg)) return msg
+  if (msg && !/^[\d\s\p{P}]+$/u.test(msg)) return msg
   return "Couldn't reach the board — make sure it's on and in range, then try again."
 }
+
+/** Beat to wait before the single retry below — short enough to be invisible. */
+const RETRY_DELAY_MS = 120
 
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
@@ -83,7 +88,8 @@ function delay(ms: number): Promise<void> {
  * writeValueWithoutResponse can transiently reject (GATT momentarily busy, a
  * radio hiccup) even on a healthy connection. Retry once after a short beat
  * before giving up; a genuine failure (disconnected, out of range) rejects again
- * and propagates.
+ * and propagates. Log the swallowed first error — otherwise a board that retries
+ * on every chunk looks perfectly healthy and its flakiness leaves no trail.
  */
 async function writeWithRetry(
   characteristic: BluetoothRemoteGATTCharacteristic,
@@ -91,8 +97,9 @@ async function writeWithRetry(
 ): Promise<void> {
   try {
     await characteristic.writeValueWithoutResponse(chunk)
-  } catch {
-    await delay(120)
+  } catch (err) {
+    console.warn('[ble] write retry after transient failure:', describeBleError(err))
+    await delay(RETRY_DELAY_MS)
     await characteristic.writeValueWithoutResponse(chunk)
   }
 }

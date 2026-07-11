@@ -16,9 +16,13 @@ and keeps the first candidate whose normalized name is a substring of the video 
 (the confidence gate validated in the pilots: ~zero wrong matches, misses are just no-match).
 
 Two safety behaviours from the ce-doc-review:
-  • Manual-review gate — a DISTINCTIVE name (normalized length >= NAME_MIN_SPECIFIC) is
-    auto-approved (`status='approved'`); a SHORT / generic name is held `status='pending'`
-    for hand review, because the substring gate can false-match a generic name.
+  • Manual-review gate (two conditions to AUTO-APPROVE) — the name is DISTINCTIVE (normalized
+    length >= NAME_MIN_SPECIFIC) AND the matched title actually NAMES THE BOARD (every board-
+    suffix token — MOONBOARD, the variant, the year — is present). Otherwise the row is held
+    `status='pending'` for a human glance. This closes the false-positive the substring gate
+    alone allowed: a generic name (e.g. "Send It") matching an unrelated video ("How to send
+    it") whose title never mentions the board, and a problem matching the WRONG board's clip.
+    Print flags: OK=approved, SML=held (short/generic name), OFF=held (title doesn't name board).
   • Resumable / idempotent — already-seeded problems (source='seed', this board) are fetched
     up front and skipped, so a daily run processes the NEXT --limit unseeded benchmarks and
     picks up where the last left off. That skip is what makes re-runs non-duplicating: each
@@ -79,6 +83,21 @@ def strip_symbols(s):
 def norm(s):
     """Uppercase, alphanumerics only — for substring confidence matching."""
     return re.sub(r"[^A-Z0-9]", "", (s or "").upper())
+
+
+def tokens(s):
+    """Normalized alphanumeric word tokens of a string (for token-presence checks)."""
+    return [norm(w) for w in re.findall(r"[A-Za-z0-9]+", strip_symbols(s)) if norm(w)]
+
+
+def title_names_board(title, suffix):
+    """True when EVERY board-suffix token (e.g. MOONBOARD, MINI, 2025) appears in the title.
+    The board suffix is added to the search QUERY but YouTube ranks loosely, so the top hit can
+    be an unrelated video that merely contains the problem name as a substring. Requiring the
+    board tokens in the MATCHED title is what rejects those false positives — and stops a
+    mini-2025 problem from auto-approving a 2019-board clip (wrong holds = wrong beta)."""
+    t = norm(title)
+    return all(tok in t for tok in tokens(suffix))
 
 
 def iso_to_secs(d):
@@ -246,9 +265,13 @@ def run_seed(args, yt_key, base_url, sb_key):
                 missed += 1
                 print(f"  {i:>3}. ——   {name[:40]}  (no confident match)")
                 continue
-            # manual-review gate: short/generic names are held pending (substring gate is weak there)
+            # Manual-review gate: auto-approve ONLY a DISTINCTIVE name (not short/generic) whose
+            # matched title actually NAMES THIS BOARD. A short name, or a match on a title that
+            # doesn't mention the board, is held `pending` for a human glance rather than
+            # published live — the substring match alone is too weak to trust in those cases.
             distinctive = len(norm(strip_symbols(name))) >= NAME_MIN_SPECIFIC
-            status = "approved" if distinctive else "pending"
+            on_board = title_names_board(best["title"], suffix)
+            status = "approved" if (distinctive and on_board) else "pending"
             approved += status == "approved"
             pending += status == "pending"
             rows.append({
@@ -258,7 +281,12 @@ def run_seed(args, yt_key, base_url, sb_key):
                 "is_short": best["is_short"], "views": best["views"],
                 "source": "seed", "status": status,
             })
-            flag = "OK " if status == "approved" else "REV"
+            if status == "approved":
+                flag = "OK "
+            else:
+                flag = "REV" if distinctive else "SML"  # SML = held on a short/generic name
+                if distinctive and not on_board:
+                    flag = "OFF"  # OFF = matched a title that doesn't name the board
             print(f"  {i:>3}. {flag}  {name[:40]:40} → {best['title'][:44]}")
     except QuotaExhausted as e:
         print(f"\n⚠️  YouTube quota exhausted — stopping cleanly, resume tomorrow. ({e})")

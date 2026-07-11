@@ -21,9 +21,11 @@ Two safety behaviours from the ce-doc-review:
     for hand review, because the substring gate can false-match a generic name.
   • Resumable / idempotent — already-seeded problems (source='seed', this board) are fetched
     up front and skipped, so a daily run processes the NEXT --limit unseeded benchmarks and
-    picks up where the last left off. The upsert merges on the composite key
-    (source_catalog_id, provider, video_id), so re-runs never duplicate. On a YouTube quota
-    error (403/429) the run stops cleanly — resume tomorrow.
+    picks up where the last left off. That skip is what makes re-runs non-duplicating: each
+    batch is all-new problems, so a plain INSERT can't self-conflict. (We can't PostgREST
+    `on_conflict` the dedupe index because it's PARTIAL — `…where not deleted` — and Postgres
+    won't infer a partial index as an ON CONFLICT arbiter; a stray collision is skipped
+    per-row.) On a YouTube quota error (403/429) the run stops cleanly — resume tomorrow.
 
 Boards: seed the DEFAULT board (Mini 2025) first; 2019 Masters is a later run.
 
@@ -159,18 +161,38 @@ def seeded_ids(base_url, key):
         return {row["source_catalog_id"] for row in json.load(r)}
 
 
-def upsert(base_url, key, rows):
-    """Idempotent upsert merging on the composite dedupe key (NOT the random PK)."""
-    url = (f"{base_url}/rest/v1/problem_beta_videos"
-           f"?on_conflict=source_catalog_id,provider,video_id")
-    req = Request(url, data=json.dumps(rows).encode(),
-                  headers=_sb_headers(key, {"Prefer": "resolution=merge-duplicates,return=minimal"}),
-                  method="POST")
+def _insert(url, key, payload):
+    req = Request(url, data=json.dumps(payload).encode(),
+                  headers=_sb_headers(key, {"Prefer": "return=minimal"}), method="POST")
+    return urlopen(req, timeout=120)
+
+
+def insert_rows(base_url, key, rows):
+    """Insert this run's matched rows. Idempotency across runs comes from the seeded_ids()
+    skip (already-seeded problems are filtered out before we get here), so the batch is all-new
+    problems and never self-conflicts. We deliberately DON'T PostgREST-`on_conflict` the dedupe
+    index: it's PARTIAL (`…where not deleted`), and Postgres won't infer a partial index as an
+    ON CONFLICT arbiter (that's the 42P10 error). If the batch does hit a live duplicate (e.g. a
+    re-run racing a prior partial write), fall back to per-row inserts and skip the 409s so the
+    run still makes progress. Returns the number of rows actually written."""
+    url = f"{base_url}/rest/v1/problem_beta_videos"
     try:
-        with urlopen(req, timeout=120) as r:
-            return r.status
+        with _insert(url, key, rows):
+            return len(rows)
     except HTTPError as e:
-        sys.exit(f"Upsert failed ({e.code}): {e.read().decode(errors='replace')}")
+        if e.code != 409:
+            sys.exit(f"Insert failed ({e.code}): {e.read().decode(errors='replace')}")
+    # Batch hit an existing live clip — retry row-by-row, skipping the duplicates.
+    written = 0
+    for row in rows:
+        try:
+            with _insert(url, key, [row]):
+                written += 1
+        except HTTPError as e:
+            if e.code == 409:
+                continue  # already-present live clip — skip
+            sys.exit(f"Insert failed ({e.code}): {e.read().decode(errors='replace')}")
+    return written
 
 
 # ── modes ────────────────────────────────────────────────────────────────────
@@ -238,11 +260,28 @@ def run_seed(args, yt_key, base_url, sb_key):
           f"{missed} no-match.")
     if not rows:
         return
-    if args.dry_run:
-        print("[dry-run] not writing to Supabase.")
+
+    # Persist the matched rows BEFORE writing — the YouTube search that produced them is the
+    # expensive, quota-limited step, so an insert failure (or a quota stop mid-run) must never
+    # throw it away. Reinsert any time with `--from-file <path>` at zero quota.
+    cache = os.path.join(os.path.dirname(os.path.abspath(path)), f".beta_matches_{args.board}.json")
+    with open(cache, "w") as f:
+        json.dump(rows, f, indent=2)
+    print(f"Saved {len(rows)} matched rows → {cache}  (reinsert with --from-file if this write fails)")
+
+    n = insert_rows(base_url, sb_key, rows)
+    print(f"Inserted {n} beta rows.")
+
+
+def run_from_file(args, base_url, sb_key):
+    """Insert previously-matched rows from a sidecar JSON (written by a prior run). No YouTube
+    calls — this is the zero-quota recovery path when a seed matched but the write failed."""
+    rows = json.load(open(args.from_file))
+    print(f"Loaded {len(rows)} matched rows from {args.from_file}")
+    if not rows:
         return
-    upsert(base_url, sb_key, rows)
-    print(f"Upserted {len(rows)} beta rows.")
+    n = insert_rows(base_url, sb_key, rows)
+    print(f"Inserted {n} beta rows.")
 
 
 def run_revalidate(args, yt_key, base_url, sb_key):
@@ -288,18 +327,25 @@ def main():
     ap.add_argument("--dry-run", action="store_true", help="no Supabase writes")
     ap.add_argument("--revalidate", action="store_true",
                     help="check stored clips still exist; soft-delete dead ones")
+    ap.add_argument("--from-file", metavar="PATH",
+                    help="insert previously-matched rows from a sidecar JSON (zero-quota "
+                         "recovery after a failed write); no YouTube calls")
     args = ap.parse_args()
 
+    # --from-file is an insert-only recovery path: needs Supabase creds, no YouTube key.
+    needs_yt = not args.dry_run and not args.from_file
     yt_key = os.environ.get("YOUTUBE_API_KEY")
-    if not yt_key and not args.dry_run:
-        # A dry run is offline (no YouTube calls), so it needs no key.
-        sys.exit("Set YOUTUBE_API_KEY in the environment (or pass --dry-run).")
+    if needs_yt and not yt_key:
+        # A dry run is offline, and --from-file re-inserts saved rows — neither hits YouTube.
+        sys.exit("Set YOUTUBE_API_KEY in the environment (or pass --dry-run / --from-file).")
     base_url = (os.environ.get("SUPABASE_URL") or "").rstrip("/")
     sb_key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
     if not args.dry_run and (not base_url or not sb_key):
         sys.exit("Set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY (or pass --dry-run).")
 
-    if args.revalidate:
+    if args.from_file:
+        run_from_file(args, base_url, sb_key)
+    elif args.revalidate:
         run_revalidate(args, yt_key, base_url, sb_key)
     else:
         run_seed(args, yt_key, base_url, sb_key)

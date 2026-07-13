@@ -190,6 +190,14 @@ user submissions fill the long tail (Phase 2). Scrape-vs-upload was a false bina
   one-off that upserts into a public-read table — **not** a live runtime job. No API key ships in
   the client; the client only ever reads `problem_beta_videos` (anon) and hits YouTube's public
   thumbnail/iframe endpoints.
+- **KTD5 — Seed and user paths never cross-approve (2026-07-13).** The seed inserts plainly
+  and **skips** live duplicates on a 409 (verified in `scripts/seed_beta_videos.py` `insert_rows`)
+  — it never upserts over, relabels, or approves an existing row. So if a user's `pending`
+  submission and a later seed match collide on the dedupe tuple, the seed skips and the user row
+  stays `pending` for normal moderation; a user submission can **never** be auto-approved by the
+  seed touching it. This keeps the status gate (KTD2) the *only* way a row goes live, even across
+  the seed/user boundary. The minor cost — a benchmark-matching video sits in the queue instead of
+  auto-approving because the user got there first — is accepted (one click to approve).
 
 ## Implementation Plan (Phase 1 — HOW)
 
@@ -339,8 +347,9 @@ sequenceDiagram
 - **Dependencies:** none (extends `0010`).
 - **Files:** `supabase/migrations/0011_beta_user_submissions.sql`,
   `supabase/migrations/tests/0011_beta_user_submissions_rls.sql`,
-  `supabase/migrations/tests/run_rls_test.sh` (add `0011` to the enumerated run if it lists
-  migrations).
+  `supabase/migrations/tests/run_rls_test.sh` (chain `0010 → 0011`),
+  `supabase/migrations/tests/stub_supabase.sql` (add a no-op `net.http_post` stub so the U2
+  notification trigger *creates* on vanilla Postgres — Q6; mirrors the existing `auth.uid()` stub).
 - **Approach:** Add one insert policy, mirroring `0003`'s `list_problems` insert policy
   (`for insert to authenticated with check (…)`). The clamp must pin **every** column the client
   is supposed to leave to the server — not just the trust fields — so "the client inserts only
@@ -369,7 +378,9 @@ sequenceDiagram
   flood the table and the U2 notification channel. Enforce in a `BEFORE INSERT` trigger (RLS
   `with check` can't easily self-count): `raise` / reject when
   `(select count(*) from problem_beta_videos where added_by = auth.uid() and status = 'pending'
-  and not deleted) >= N` (start N≈10). Trigger, not policy, so the limit is one place and testable.
+  and not deleted) >= 10` (**N = 10**, Q5). Counts *pending* only, so it self-heals as you
+  moderate; no per-problem or lifetime cap. Trigger, not policy, so the limit is one place and
+  testable. If users routinely hit it, that's the #9 tripwire firing.
 - **`video_id` format (FYI):** add a defense-in-depth CHECK so a direct-API insert can't store a
   malformed id even though the client extractor (U3) already validates it:
   `alter table public.problem_beta_videos add constraint problem_beta_videos_video_id_fmt
@@ -418,6 +429,11 @@ sequenceDiagram
   `pg_net`/`net.http_post` to the owner's channel (email relay / Slack / Discord incoming webhook)
   so only real submissions notify. The webhook URL is a configured secret (Vault / DB setting),
   not committed.
+  - **`pg_net` is a project prerequisite, not a migration line (Q6).** Enable it once via the
+    Supabase dashboard; do **not** `create extension pg_net` inside `0011` (the extension isn't
+    installed on the throwaway test Postgres, so that line would break the RLS harness). The
+    trigger references `net.http_post`; the harness stubs it as a no-op (see U1 Files) so `0011`
+    applies wholesale and the clamp/rate-limit assertions still run.
 - **Backstop — the enrich pass is the reconciliation list (#3):** because notification delivery
   can fail silently (expired hook, spam filter, 500), the owner's routine is: run
   `seed_beta_videos.py --enrich-pending` (U6), which **prints the full pending queue** — that
@@ -429,9 +445,11 @@ sequenceDiagram
     — reject **must** set `deleted=true`, not `status` alone. The dedupe index is
     `where not deleted`, so a status-only reject leaves the tuple occupied and the clip becomes
     permanently un-addable (see U1 / R8, #2).
-- **Test expectation: none (ops/config).** Smoke-verify once: submit a beta on staging → the
-  trigger fires exactly once (and does **not** fire on a seed insert); confirm the notification
-  arrives; confirm `--enrich-pending` lists the pending row even with the webhook disabled.
+- **Test expectation:** delivery is ops/config (none), but the RLS harness **does** exercise that
+  the trigger *creates and fires* against the `net.http_post` stub (Q6) — proving the `WHEN
+  (new.source='user')` filter (fires on a user insert, **not** on a seed insert). Smoke-verify
+  real delivery once on staging: submit a beta → notification arrives; confirm `--enrich-pending`
+  lists the pending row even with the webhook disabled.
 
 ### U3. `youtubeUrl.ts` — client-side URL → `video_id` extractor
 
@@ -524,11 +542,17 @@ sequenceDiagram
     ("Enter a YouTube video link"), shown below the field; it **clears as the user edits** and
     resets when the drawer closes — matching the field-error rigor the four `BetaVideos` states
     already model.
-  - **Pending signal on reopen (#8):** on a successful submit, record a lightweight local flag
-    (`localStorage`, keyed by `source_catalog_id`). When `BetaVideos` mounts for a problem the
-    user has a pending submission on, show a small "Your beta is pending review" note by the CTA
-    so a returning submitter sees progress (instead of the plain empty/populated state) and isn't
-    tempted to resubmit a different URL. Purely client-local — no moderation UI, no server read.
+  - **Pending signal on reopen (#8) — self-expiring (Q2):** on a successful submit, record a
+    lightweight local flag with a **timestamp** (`localStorage`, keyed by `source_catalog_id`).
+    When `BetaVideos` mounts for a problem the user has a recent pending submission on, show a
+    small "Your beta is pending review" note by the CTA so a returning submitter sees progress
+    (instead of the plain empty/populated state) and isn't tempted to resubmit a different URL.
+    The note **lapses after ~7 days** back to the plain CTA, and clears immediately if the
+    submitted `video_id` shows up in the approved fetch. This is deliberate: **rejection is
+    silent** (Q2) — a rejected row is `deleted=true` and invisible to every client, so the note
+    can't detect a reject; self-expiry stops it from saying "pending" forever after a decline. A
+    real user-facing reject outcome is deferred (see Open Questions). Purely client-local — no
+    moderation UI, no server read.
   - **A11y:** the CTA is a labelled button; the drawer traps focus and restores it on close
     (shadcn `Drawer` default); the input has an associated label.
 - **Patterns to follow:** `web/src/catalog/ProblemDetail.tsx` sign-in gate
@@ -548,7 +572,8 @@ sequenceDiagram
   - Double-submit (rapid double tap / Enter) → guarded to a single insert.
   - CTA renders in **both** empty and has-videos states.
   - After a successful submit, reopening the same problem shows the "pending review" note (#8);
-    a different problem does not.
+    a different problem does not; the note is gone once the flag is older than the expiry window,
+    and clears immediately if the submitted `video_id` appears in the approved fetch (Q2).
 
 ### U6. `seed_beta_videos.py --enrich-pending` — server-side metadata fill
 
@@ -572,10 +597,13 @@ sequenceDiagram
   - Reuse the script's `iso_to_secs`/service-role writer. **Does not approve** — approval stays a
     deliberate manual dashboard action (U2/R7). Idempotent: re-running skips already-filled rows;
     a `video_id` the API no longer returns is left untouched (or logged), never crashed on.
-- **Reconciliation output (#3):** the run **prints the full pending queue** it selected (problem,
-  video_id, submitter, age) before/after enriching. This list — not the U2 notification — is the
-  authoritative "what's waiting for me" surface, so a dropped notification never strands a
-  submission.
+- **Reconciliation output (#3) + length flag (Q3):** the run **prints the full pending queue** it
+  selected (problem, video_id, submitter, age) before/after enriching. This list — not the U2
+  notification — is the authoritative "what's waiting for me" surface, so a dropped notification
+  never strands a submission. Each row shows its enriched `duration_s`, and **non-Shorts
+  (`is_short=false`) are flagged** (e.g. `⚠ 18:42`) so a compilation/long video is a one-glance
+  reject at moderation — Phase 2 allows any length (Q3), it just makes the outlier loud rather
+  than blocking it.
 - **Patterns to follow:** the existing `videos.list` enrichment + `--revalidate` mode in
   `scripts/seed_beta_videos.py` (extend its part list to add `snippet`); env-only
   `YOUTUBE_API_KEY`, never committed.

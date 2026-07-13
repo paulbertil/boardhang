@@ -100,15 +100,25 @@ create trigger ascents_emit_activity
 -- broadcasts on 'session:<id>'; everyone else is filtered out. The topic column is not trusted
 -- for the check — realtime.topic() is. There is deliberately NO insert policy: clients never
 -- publish here (emission is the server-side trigger above).
+-- A client fully controls the channel name it subscribes to, so the topic is untrusted input.
+-- The uuid cast must be UNREACHABLE for a malformed topic (`session:`, `session:garbage`) — a
+-- bare `like 'session:%'` guard would still let `''::uuid` / `'garbage'::uuid` raise, and
+-- Postgres does not promise left-to-right short-circuit of AND. A CASE (ordered evaluation is
+-- guaranteed) gated by a full-uuid regex casts only a well-formed id, and denies everything else
+-- cleanly instead of erroring.
 create policy "Members receive session broadcasts"
     on realtime.messages for select to authenticated
     using (
         realtime.messages.extension = 'broadcast'
-        and realtime.topic() like 'session:%'
-        and public.is_session_member(
-            substring(realtime.topic() from 'session:(.*)')::uuid,
-            (select auth.uid())
-        )
+        and case
+            when realtime.topic() ~
+                 '^session:[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'
+            then public.is_session_member(
+                substring(realtime.topic() from 'session:(.*)')::uuid,
+                (select auth.uid())
+            )
+            else false
+        end
     );
 
 -- ─────────────────────────────────────────────────────────────────────────────

@@ -34,6 +34,10 @@ let currentSessionId: string | null = null
 let channel: RealtimeChannel | null = null
 let debounceTimer: ReturnType<typeof setTimeout> | null = null
 let selfId: string | null = null
+// Monotonic activation counter. The async setup below must gate on THIS, not on the session id:
+// an id check cannot tell a still-current activation from a superseded one for the SAME id (e.g.
+// S1 → null → S1 with two getSession() promises in flight), which would orphan a channel.
+let activationToken = 0
 
 function scheduleRefetch(): void {
   if (debounceTimer) clearTimeout(debounceTimer)
@@ -57,6 +61,7 @@ function teardown(): void {
   }
   if (channel && supabase) supabase.removeChannel(channel)
   channel = null
+  selfId = null // don't let a previous account's id linger and cause a false self-skip
 }
 
 /**
@@ -66,6 +71,7 @@ function teardown(): void {
  */
 export function activateSessionRealtime(sessionId: string | null): void {
   if (sessionId === currentSessionId) return
+  const myToken = ++activationToken
   currentSessionId = sessionId
   teardown()
   if (!sessionId || !supabase) return // deactivated, or unconfigured → pull model only (R6)
@@ -73,20 +79,23 @@ export function activateSessionRealtime(sessionId: string | null): void {
   const client = supabase
   // Resolve the session first: a private channel's join must carry the JWT (setAuth) BEFORE
   // subscribe, and we want our own id for the self-send skip. Best-effort — never throw.
-  void client.auth.getSession().then(({ data }) => {
-    if (sessionId !== currentSessionId) return // switched/deactivated while awaiting
-    selfId = data.session?.user.id ?? selfId
-    const token = data.session?.access_token
-    if (token) client.realtime.setAuth(token)
+  void client.auth
+    .getSession()
+    .then(({ data }) => {
+      if (myToken !== activationToken) return // a newer activation superseded this one
+      selfId = data.session?.user.id ?? selfId
+      const token = data.session?.access_token
+      if (token) client.realtime.setAuth(token)
 
-    const ch = client.channel(`session:${sessionId}`, { config: { private: true } })
-    ch.on('broadcast', { event: NUDGE_EVENT }, (msg: { payload?: NudgePayload }) => {
-      if (sessionId !== currentSessionId) return // a late message after a fast switch
-      onNudge(msg.payload?.author)
+      const ch = client.channel(`session:${sessionId}`, { config: { private: true } })
+      ch.on('broadcast', { event: NUDGE_EVENT }, (msg: { payload?: NudgePayload }) => {
+        if (myToken !== activationToken) return // a late message after a fast switch
+        onNudge(msg.payload?.author)
+      })
+      ch.subscribe()
+      channel = ch
     })
-    ch.subscribe()
-    channel = ch
-  })
+    .catch(() => {}) // getSession/subscribe failure → stay on the pull model (R6)
 }
 
 /**

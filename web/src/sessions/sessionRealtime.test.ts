@@ -140,6 +140,20 @@ describe('sessionRealtime', () => {
     expect(h.channels).toHaveLength(1)
   })
 
+  it('does not leak a channel on same-id re-activation with overlapping getSession', async () => {
+    // S1 → null → S1 with two getSession() promises in flight. An id-based guard would let the
+    // superseded first activation create a second, orphaned channel; the activation-token guard
+    // must drop it so exactly one channel exists and it tears down cleanly.
+    activateSessionRealtime('S1') // token 1, getSession #1 queued
+    activateSessionRealtime(null) // token 2, teardown (no channel yet)
+    activateSessionRealtime('S1') // token 3, getSession #2 queued
+    await flush()
+    expect(h.channels).toHaveLength(1)
+    expect(h.channels[0].name).toBe('session:S1')
+    activateSessionRealtime(null)
+    expect(h.removed).toHaveLength(1) // the one real channel removed; no orphan left behind
+  })
+
   it('no-ops when the client is unconfigured (pull-model fallback)', async () => {
     h.nullClient = true
     activateSessionRealtime('S1')

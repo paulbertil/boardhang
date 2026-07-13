@@ -145,13 +145,21 @@ begin
     raise notice 'PASS: membership is per-channel (not a member of S_LIVE2 → denied)';
 end $$;
 
--- A malformed / non-session topic → denied (no crash on the substring/uuid cast).
-select set_config('realtime.topic', 'lobby', false);
+-- Malformed / hostile topics → denied WITHOUT raising on the uuid cast. A client picks its own
+-- channel name, so 'session:' (empty capture) and 'session:garbage' (non-uuid capture) both
+-- satisfy a naive like-guard and would throw invalid_text_representation if the cast were
+-- reachable; the CASE + full-uuid regex must deny them cleanly. 'lobby' has no session: prefix.
 do $$
+declare _topic text;
 begin
-    assert (select count(*) from realtime.messages) = 0,
-        'FAIL: a non-session topic was authorized';
-    raise notice 'PASS: non-session topic denied without error';
+    foreach _topic in array array['lobby', 'session:', 'session:garbage',
+                                  'session:11111111-1111-1111-1111-11111111111'] -- 35 hex → not a uuid
+    loop
+        perform set_config('realtime.topic', _topic, false);
+        assert (select count(*) from realtime.messages) = 0,
+            'FAIL: hostile topic authorized or raised: ' || _topic;
+    end loop;
+    raise notice 'PASS: malformed/hostile topics denied without error (no uuid-cast raise)';
 end $$;
 
 reset role;

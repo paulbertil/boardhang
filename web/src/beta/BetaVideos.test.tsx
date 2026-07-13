@@ -9,7 +9,14 @@ const refetch = vi.fn()
 vi.mock('./betaStore', () => ({
   useBetaVideos: () => entry,
   refetchBeta: (id: string) => refetch(id),
+  submitBeta: vi.fn(),
 }))
+
+// The submission path (auth gate, sign-in dialog, submit drawer) has its own tests; here we keep
+// it inert so these cases stay focused on the store-driven display states.
+vi.mock('../auth/AuthProvider', () => ({ useAuth: () => ({ status: 'signedOut' }) }))
+vi.mock('../auth/SignInDialog', () => ({ SignInDialog: () => null }))
+vi.mock('./BetaSubmitDrawer', () => ({ BetaSubmitDrawer: () => null }))
 
 import { BetaVideos } from './BetaVideos'
 

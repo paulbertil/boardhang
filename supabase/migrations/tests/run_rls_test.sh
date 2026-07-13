@@ -58,6 +58,11 @@ begin
   if to_regclass('public.problem_beta_videos') is not null then
     execute 'grant select, insert, update, delete on public.problem_beta_videos to anon, authenticated';
   end if;
+  -- 0011 chain (0002 → 0007): the receive-auth assertions query realtime.messages as
+  -- `authenticated`, and is_session_member reads session_members. RLS still gates rows.
+  if to_regclass('public.session_members') is not null then
+    execute 'grant select on public.sessions, public.session_members to anon, authenticated';
+  end if;
 end $$;
 SQL
 
@@ -80,5 +85,14 @@ run_case "$HERE/0009_avatars_rls.sql" "$HERE/../0008_logbook_imports.sql" "$HERE
 # 0010: beta videos — public approved-only read + Phase-1 write-closed + partial dedupe index.
 # Independent of the logbook/avatars chain, so it applies alone.
 run_case "$HERE/0010_problem_beta_videos_rls.sql" "$HERE/../0010_problem_beta_videos.sql"
+
+# 0011: session realtime — the ascents→broadcast fan-out trigger + private-channel receive
+# authorization. Needs ascents (0002) + sessions/session_members/is_session_member (0007), and
+# the realtime-schema stub applied before 0011 so realtime.messages exists for its policy.
+run_case "$HERE/0011_session_realtime_rls.sql" \
+  "$HERE/../0002_logbook_sync.sql" \
+  "$HERE/../0007_collaboration_sessions.sql" \
+  "$HERE/stub_realtime.sql" \
+  "$HERE/../0011_session_realtime.sql"
 
 echo "✅ ALL RLS CASES PASSED"

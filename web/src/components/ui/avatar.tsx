@@ -3,12 +3,14 @@ import { Avatar as AvatarPrimitive } from "@base-ui/react/avatar"
 
 import { cn } from "@/lib/utils"
 
+type AvatarSize = "default" | "sm" | "lg" | "xs" | "xxs"
+
 function Avatar({
   className,
   size = "default",
   ...props
 }: AvatarPrimitive.Root.Props & {
-  size?: "default" | "sm" | "lg" | "xs" | "xxs"
+  size?: AvatarSize
 }) {
   return (
     <AvatarPrimitive.Root
@@ -105,3 +107,4 @@ export {
   AvatarGroupCount,
   AvatarBadge,
 }
+export type { AvatarSize }

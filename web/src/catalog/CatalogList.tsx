@@ -73,9 +73,6 @@ export function CatalogList({
   const showThumbnails = useShowPreviews()
   const [visibleCount, setVisibleCount] = useState(PAGE)
   const sentinelRef = useRef<HTMLDivElement>(null)
-  // A senders map is supplied only when a session targets this board (else undefined) — the rows
-  // use this to move send status into the sends pill and suppress the name-line self-check.
-  const sessionActive = senders !== undefined
 
   const displayed = useMemo(
     () => (transform ? transform(problems) : applyFilters(problems, DEFAULT_FILTERS, DEFAULT_CONTEXT)),
@@ -166,7 +163,6 @@ export function CatalogList({
           board={board}
           isFavorite={favoriteIds.has(p.source_catalog_id)}
           isSent={sentIds.has(p.source_catalog_id)}
-          sessionActive={sessionActive}
           senders={senders?.get(p.source_catalog_id)}
           sendersDimmed={sendersDimmed}
           showThumbnail={showThumbnails}

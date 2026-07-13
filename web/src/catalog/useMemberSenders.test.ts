@@ -80,6 +80,20 @@ describe('buildSenders', () => {
     expect(senders.size).toBe(0)
   })
 
+  it('handles a null selfId — no chip is flagged self, roster order preserved', () => {
+    const senders = buildSenders(['alice', 'bob'], null, sets({ alice: ['X'], bob: ['X'] }), roster)
+    const chips = senders.get('X')!
+    expect(chips.every((c) => !c.isSelf)).toBe(true)
+    expect(chips.map((c) => c.userId)).toEqual(['alice', 'bob'])
+  })
+
+  it('drops a member who has sends but is absent from the members snapshot', () => {
+    // members is the authority (diverges from useSessionFilterRows' roster fallback): a sender not
+    // in the snapshot — e.g. just departed — must not appear.
+    const senders = buildSenders(['self', 'alice'], 'self', sets({ alice: ['X'], ghost: ['X'] }), roster)
+    expect(senders.get('X')!.map((c) => c.userId)).toEqual(['alice'])
+  })
+
   it('uses the roster display label and avatar url for other members', () => {
     const withAvatar: SessionMember[] = [{ ...member('alice', 'Alice'), avatarUrl: 'https://cdn/a.png' }]
     const senders = buildSenders(['alice'], 'self', sets({ alice: ['X'] }), withAvatar)

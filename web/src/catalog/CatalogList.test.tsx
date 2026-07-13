@@ -149,13 +149,24 @@ describe('CatalogList', () => {
     expect(container.querySelector('[data-slot="avatar-group"]')!.parentElement!.className).toContain('opacity-50')
   })
 
-  it('suppresses the name-line self-check when a session is active (senders map present)', () => {
-    // sentIds marks the row as self-sent, but a session is active (empty senders map supplied),
-    // and this problem has no pill entry → no "Sent" mark shows on the name line.
+  it('keeps the name-line self-check as a fallback when the pill has no entry for a self-sent row', () => {
+    // Session active (senders map present) but empty for this problem (loading/stale) → the row
+    // must still show the local self-check rather than hide a known send.
     const { container } = renderList([problem('a', '6A', 'Alpha')], {
       sentIds: new Set(['a']),
       senders: new Map(),
     })
-    expect(container.querySelector('[aria-label="Sent"]')).toBeNull()
+    expect(container.querySelector('[aria-label="Sent"]')).not.toBeNull()
+  })
+
+  it('suppresses the name-line self-check once self is in the row pill', () => {
+    const senders = new Map<string, SenderChip[]>([
+      ['a', [{ userId: 'me', isSelf: true, label: 'You', initials: 'YO', avatarUrl: null }]],
+    ])
+    const { container } = renderList([problem('a', '6A', 'Alpha')], { sentIds: new Set(['a']), senders })
+    expect(container.querySelector('[aria-label="Sent"]')).toBeNull() // moved into the pill
+    expect(container.querySelector('[data-slot="avatar-group"]')!.parentElement!.getAttribute('aria-label')).toBe(
+      'Sent by You',
+    )
   })
 })

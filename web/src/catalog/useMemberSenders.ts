@@ -28,10 +28,13 @@ export interface SenderChip {
 }
 
 export interface MemberSendersUI {
-  /** Sender chips keyed by `source_catalog_id`; absent key = nobody (else self) has sent it. */
+  /** Sender chips keyed by `source_catalog_id`; absent key = nobody in the crew (self included)
+   *  has sent it. */
   senders: Map<string, SenderChip[]>
   /** 'loading' = projection unready (render nothing yet); 'ready' = live; 'paused' = projection
-   *  errored or dropped by max-age, so the last-known senders are shown DIMMED. */
+   *  errored OR dropped by max-age. On the ERROR path the store keeps the last-good map, so the
+   *  pill renders DIMMED; on the max-age drop the store empties the map, so there is nothing to
+   *  render and the pill simply disappears until the next refresh. */
   state: 'loading' | 'ready' | 'paused'
 }
 

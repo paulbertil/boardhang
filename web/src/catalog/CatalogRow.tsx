@@ -28,12 +28,10 @@ interface CatalogRowProps {
   problem: CatalogProblem
   board: CatalogBoardDef
   isFavorite?: boolean
-  /** The user has a logged send for this problem — shows the green sent check (iOS parity).
-   *  Suppressed in a session (`sessionActive`): the send is shown in the sends pill instead. */
+  /** The user has a logged send for this problem — shows the green name-line check (iOS parity).
+   *  Suppressed only when the send is already shown by self's own avatar in the sends pill, so
+   *  a session whose projection is still loading/stale never hides a known send (P1/P3). */
   isSent?: boolean
-  /** A collaboration session is active on this board — moves send status to the sends pill and
-   *  suppresses the name-line self-check so it isn't shown twice (P1/P3). */
-  sessionActive?: boolean
   /** Crew members (self included, self first) who have sent this problem — the sends pill (P2/P3). */
   senders?: SenderChip[]
   /** The projection is paused/stale/offline — dim the last-known sends pill (P5). */
@@ -50,13 +48,17 @@ export function CatalogRow({
   board,
   isFavorite = false,
   isSent = false,
-  sessionActive = false,
   senders,
   sendersDimmed = false,
   showThumbnail = false,
   highlightHolds,
   onSelect,
 }: CatalogRowProps) {
+  // Suppress the name-line self-check only once self is actually represented in the pill — not
+  // merely because a session is active. While the crew projection is loading or max-age-stale
+  // (empty map, no pill), the local self-check stays as the fallback so a known send is never
+  // hidden with nowhere to show.
+  const selfInPill = senders?.some((s) => s.isSelf) ?? false
   return (
     <button
       type="button"
@@ -76,8 +78,8 @@ export function CatalogRow({
           {problem.is_benchmark && (
             <BadgeCheck role="img" aria-label="Benchmark" className="size-4 shrink-0 text-benchmark" />
           )}
-          {/* Solo: the send shows here. In a session it moves to the sends pill below (P1/P3). */}
-          {isSent && !sessionActive && (
+          {/* Shown unless self's send is already carried by the pill below (P1/P3). */}
+          {isSent && !selfInPill && (
             <CheckCircle2 role="img" aria-label="Sent" className="size-4 shrink-0 text-success" />
           )}
           {isFavorite && (
@@ -87,13 +89,15 @@ export function CatalogRow({
         <ProblemMeta problem={problem} />
         {senders && senders.length > 0 && (
           <div
+            role="img"
             aria-label={sendersAriaLabel(senders)}
             className={cn(
               'mt-1 inline-flex w-fit items-center gap-1.5 rounded-full bg-secondary py-1 pr-2 pl-1.5',
               sendersDimmed && 'opacity-50',
             )}
           >
-            <CheckCircle2 role="img" aria-label="Sent" className="size-3.5 shrink-0 text-success" />
+            {/* Decorative: the pill's aria-label already conveys "Sent by …" as one unit (role=img). */}
+            <CheckCircle2 aria-hidden className="size-3.5 shrink-0 text-success" />
             <AvatarGroup className="-space-x-1.5">
               {senders.slice(0, SENDER_CAP).map((s) => (
                 <MemberAvatar
@@ -103,6 +107,7 @@ export function CatalogRow({
                   isSelf={s.isSelf}
                   title={s.label}
                   size="xxs"
+                  opaque
                 />
               ))}
               {senders.length > SENDER_CAP && (

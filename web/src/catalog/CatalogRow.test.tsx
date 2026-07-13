@@ -71,19 +71,21 @@ describe('CatalogRow', () => {
     expect(screen.getByLabelText('Sent')).toBeInTheDocument()
   })
 
-  it('suppresses the name-line check in a session — send status moves to the pill', () => {
-    // In a session with no pill for this row (you have not sent it), no "Sent" mark shows at all.
-    const { rerender, container } = render(
-      <CatalogRow problem={problem()} board={board} isSent sessionActive />,
-    )
-    expect(screen.queryByLabelText('Sent')).toBeNull()
+  it('keeps the name-line check as a fallback until self is actually in the pill', () => {
+    // Session active but the projection has not (yet) placed self — empty senders (loading/stale):
+    // the local self-check stays on the name line so a known send is never hidden with no home.
+    const { rerender, container } = render(<CatalogRow problem={problem()} board={board} isSent senders={[]} />)
+    expect(screen.getByLabelText('Sent')).toBeInTheDocument()
     expect(container.querySelector('[data-slot="avatar-group"]')).toBeNull()
-    // With a pill (you are a sender), the check lives inside the pill instead.
-    rerender(
-      <CatalogRow problem={problem()} board={board} isSent sessionActive senders={[sender('me', 'You', true)]} />,
+    // Projection lists another member but not self yet: name-line check STILL shows, pill shows them.
+    rerender(<CatalogRow problem={problem()} board={board} isSent senders={[sender('a', 'Alice')]} />)
+    expect(screen.getByLabelText('Sent')).toBeInTheDocument()
+    expect(container.querySelector('[data-slot="avatar-group"]')!.parentElement!.getAttribute('aria-label')).toBe(
+      'Sent by Alice',
     )
-    const group = container.querySelector('[data-slot="avatar-group"]')!
-    expect(group.parentElement!.querySelector('[aria-label="Sent"]')).not.toBeNull()
+    // Once self is in the pill, the name-line check is suppressed — the pill is the sole home.
+    rerender(<CatalogRow problem={problem()} board={board} isSent senders={[sender('me', 'You', true)]} />)
+    expect(screen.queryByLabelText('Sent')).toBeNull()
   })
 
   it('renders the board thumbnail only when enabled', () => {
@@ -101,20 +103,33 @@ describe('CatalogRow', () => {
     expect(onSelect).toHaveBeenCalledWith(p)
   })
 
-  it('renders a one-avatar sends pill with no overflow and an accessible summary', () => {
-    const { container } = render(
-      <CatalogRow problem={problem()} board={board} sessionActive senders={[sender('a', 'Alice')]} />,
-    )
+  it('renders a one-avatar sends pill labeled as a single accessible unit', () => {
+    const { container } = render(<CatalogRow problem={problem()} board={board} senders={[sender('a', 'Alice')]} />)
     const pill = container.querySelector('[data-slot="avatar-group"]')!.parentElement!
+    // The pill is one labeled unit (role=img) so AT announces "Sent by Alice", not its children.
+    expect(pill.getAttribute('role')).toBe('img')
     expect(pill.getAttribute('aria-label')).toBe('Sent by Alice')
-    expect(pill.querySelector('[aria-label="Sent"]')).not.toBeNull() // green check label
+    // The green check is decorative inside the labeled pill (no redundant "Sent" for AT).
+    expect(pill.querySelector('[aria-label="Sent"]')).toBeNull()
+    expect(pill.querySelector('svg[aria-hidden="true"]')).not.toBeNull()
     expect(container.querySelectorAll('[data-slot="avatar"]')).toHaveLength(1)
     expect(container.querySelector('[data-slot="avatar-group-count"]')).toBeNull()
   })
 
+  it('renders self ringed, labeled "You", at xxs size', () => {
+    const { container } = render(<CatalogRow problem={problem()} board={board} senders={[sender('me', 'You', true)]} />)
+    expect(screen.getByTitle('You')).toBeInTheDocument()
+    expect(container.querySelector('[data-slot="avatar-group"]')!.parentElement!.getAttribute('aria-label')).toBe(
+      'Sent by You',
+    )
+    const avatar = container.querySelector('[data-slot="avatar"]')!
+    expect(avatar.getAttribute('data-size')).toBe('xxs')
+    expect(avatar.querySelector('[data-slot="avatar-fallback"]')!.className).toContain('ring-primary') // self ring
+  })
+
   it('caps at three avatars and shows a +K overflow count', () => {
     const senders = ['a', 'b', 'c', 'd', 'e'].map((id) => sender(id, id.toUpperCase()))
-    const { container } = render(<CatalogRow problem={problem()} board={board} sessionActive senders={senders} />)
+    const { container } = render(<CatalogRow problem={problem()} board={board} senders={senders} />)
     expect(container.querySelectorAll('[data-slot="avatar"]')).toHaveLength(3)
     const count = container.querySelector('[data-slot="avatar-group-count"]')!
     expect(count.textContent).toBe('+2')
@@ -124,21 +139,19 @@ describe('CatalogRow', () => {
   })
 
   it('renders no sends pill when senders is absent or empty', () => {
-    const { container, rerender } = render(<CatalogRow problem={problem()} board={board} sessionActive />)
+    const { container, rerender } = render(<CatalogRow problem={problem()} board={board} />)
     expect(container.querySelector('[data-slot="avatar-group"]')).toBeNull()
-    rerender(<CatalogRow problem={problem()} board={board} sessionActive senders={[]} />)
+    rerender(<CatalogRow problem={problem()} board={board} senders={[]} />)
     expect(container.querySelector('[data-slot="avatar-group"]')).toBeNull()
   })
 
   it('dims the sends pill when sendersDimmed', () => {
     const { container, rerender } = render(
-      <CatalogRow problem={problem()} board={board} sessionActive senders={[sender('a', 'Alice')]} />,
+      <CatalogRow problem={problem()} board={board} senders={[sender('a', 'Alice')]} />,
     )
     const pillClass = () => container.querySelector('[data-slot="avatar-group"]')!.parentElement!.className
     expect(pillClass()).not.toContain('opacity-50')
-    rerender(
-      <CatalogRow problem={problem()} board={board} sessionActive senders={[sender('a', 'Alice')]} sendersDimmed />,
-    )
+    rerender(<CatalogRow problem={problem()} board={board} senders={[sender('a', 'Alice')]} sendersDimmed />)
     expect(pillClass()).toContain('opacity-50')
   })
 

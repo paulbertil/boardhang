@@ -105,4 +105,12 @@ run_case "$HERE/0012_session_membership_realtime_rls.sql" \
   "$HERE/../0011_session_realtime.sql" \
   "$HERE/../0012_session_membership_realtime.sql"
 
+# 0013: session end realtime — the sessions soft-delete trigger that broadcasts session-ended.
+# Needs sessions (0007) + the realtime stub; independent of 0011/0012 (emit-only test).
+run_case "$HERE/0013_session_end_realtime_rls.sql" \
+  "$HERE/../0002_logbook_sync.sql" \
+  "$HERE/../0007_collaboration_sessions.sql" \
+  "$HERE/stub_realtime.sql" \
+  "$HERE/../0013_session_end_realtime.sql"
+
 echo "✅ ALL RLS CASES PASSED"

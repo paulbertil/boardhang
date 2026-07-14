@@ -35,6 +35,7 @@ export const NUDGE_DEBOUNCE_MS = 600
 const NUDGE_EVENT = 'ascents-changed'
 const MEMBER_JOINED_EVENT = 'member-joined'
 const MEMBER_LEFT_EVENT = 'member-left'
+const SESSION_ENDED_EVENT = 'session-ended'
 
 interface NudgePayload {
   author?: string
@@ -111,6 +112,17 @@ async function onMembershipChange(leftUserId?: string): Promise<void> {
   }
 }
 
+/**
+ * The owner ended the session for everyone (0013). Retire it locally. The owner who ended it has
+ * already retired (endSession clears it before this echo arrives), so the activeSession guard
+ * makes this a no-op for them — only other still-active members retire and see the toast.
+ */
+function onSessionEnded(): void {
+  if (!getSessionsSnapshot().activeSession) return
+  endActiveSessionLocally()
+  toast('The session ended')
+}
+
 function teardown(): void {
   if (debounceTimer) {
     clearTimeout(debounceTimer)
@@ -156,6 +168,10 @@ export function activateSessionRealtime(sessionId: string | null): void {
       ch.on('broadcast', { event: MEMBER_LEFT_EVENT }, (msg: { payload?: MembershipPayload }) => {
         if (myToken !== activationToken) return
         void onMembershipChange(msg.payload?.user_id)
+      })
+      ch.on('broadcast', { event: SESSION_ENDED_EVENT }, () => {
+        if (myToken !== activationToken) return
+        onSessionEnded()
       })
       ch.subscribe()
       channel = ch

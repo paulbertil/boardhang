@@ -10,6 +10,7 @@ import { boardShortLabel } from '../lists/listsTypes'
 import { useAuth } from '../auth/AuthProvider'
 import {
   createSession,
+  endSession,
   leaveSession,
   refreshActiveSession,
   removeMember,
@@ -178,6 +179,19 @@ function ActiveBar({ board, onShare }: { board: CatalogBoardDef; onShare: () => 
                 ))}
                 <div className="my-1 h-px bg-border" />
               </>
+            )}
+            {isOwner && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="w-full justify-start text-destructive hover:text-destructive"
+                onClick={() => {
+                  setMenuOpen(false)
+                  void endSession()
+                }}
+              >
+                End session for everyone
+              </Button>
             )}
             <Button
               variant="ghost"

@@ -364,6 +364,22 @@ export async function leaveSession(): Promise<void> {
 }
 
 /**
+ * End the active session for EVERYONE (owner-only) — soft-deletes the session row. Every member's
+ * client then retires it at once via the 0013 session-ended broadcast (with the expiry/reconcile
+ * backstop for anyone offline). RLS grants sessions UPDATE to the owner only, so a non-owner's
+ * update matches zero rows server-side; the UI only offers this to the owner. Drops it locally too.
+ */
+export async function endSession(): Promise<void> {
+  const active = state.activeSession
+  if (!active) return
+  if (supabase) {
+    const { error } = await supabase.from('sessions').update({ deleted: true }).eq('id', active.id)
+    if (error) throw new Error(error.message)
+  }
+  retire(active.id)
+}
+
+/**
  * Owner-only: remove another member from the session (KTD-11). Ejects a currently-unwanted
  * member; it does NOT rotate the invite token, so a holder of the link can rejoin until the
  * session is ended. Refreshes the roster on success.

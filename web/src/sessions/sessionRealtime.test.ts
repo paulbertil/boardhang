@@ -280,6 +280,26 @@ describe('sessionRealtime', () => {
     expect(h.rosterReloads).toBe(0)
   })
 
+  it('ends the session for a member when the owner ends it (session-ended, still active)', async () => {
+    h.activeSession = { id: 'S1' }
+    activateSessionRealtime('S1')
+    await flush()
+    fire('session-ended')
+    await flush()
+    expect(h.endedLocally).toBe(true)
+    expect(h.toasts).toEqual(['The session ended'])
+  })
+
+  it('session-ended is a no-op when already retired (the owner who ended it)', async () => {
+    h.activeSession = null // owner's endSession already retired locally before this echo
+    activateSessionRealtime('S1')
+    await flush()
+    fire('session-ended')
+    await flush()
+    expect(h.endedLocally).toBe(false)
+    expect(h.toasts).toEqual([])
+  })
+
   it('member-left with no payload falls back to the roster diff for the toast', async () => {
     h.left = [{ userId: 'other', displayName: 'Bob', handle: null, avatarUrl: null, joinedAt: '' }]
     activateSessionRealtime('S1')

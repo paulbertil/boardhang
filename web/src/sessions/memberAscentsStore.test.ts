@@ -27,6 +27,7 @@ import {
   getMemberAscentsSnapshot,
   refreshMemberAscents,
   removeMemberFromProjection,
+  withSelfSends,
 } from './memberAscentsStore'
 
 beforeEach(() => {
@@ -57,6 +58,31 @@ describe('buildMemberSets', () => {
     expect(bySets.b).toBeDefined()
     expect(bySets.b.sentIds.size).toBe(0)
     expect(bySets.b.loggedIds.size).toBe(0)
+  })
+})
+
+describe('withSelfSends', () => {
+  it('replaces the self member set with the local sends when self is in the projection', () => {
+    const bySets = {
+      me: { sentIds: new Set(['stale']), loggedIds: new Set(['stale']) },
+      other: { sentIds: new Set(['X']), loggedIds: new Set(['X']) },
+    }
+    const out = withSelfSends(bySets, 'me', new Set(['fresh']), new Set(['fresh', 'att']))
+    expect([...out.me.sentIds]).toEqual(['fresh'])
+    expect([...out.me.loggedIds].sort()).toEqual(['att', 'fresh'])
+    expect([...out.other.sentIds]).toEqual(['X']) // other members untouched
+    expect(bySets.me.sentIds.has('stale')).toBe(true) // input not mutated
+  })
+
+  it('leaves the map unchanged when self is not in the projection (presence stays projection-driven)', () => {
+    const bySets = { other: { sentIds: new Set(['X']), loggedIds: new Set(['X']) } }
+    // Same reference back — a not-yet-loaded self is NOT synthesised into the member set.
+    expect(withSelfSends(bySets, 'me', new Set(['fresh']), new Set(['fresh']))).toBe(bySets)
+  })
+
+  it('no-ops for a null selfId', () => {
+    const bySets = { me: { sentIds: new Set<string>(), loggedIds: new Set<string>() } }
+    expect(withSelfSends(bySets, null, new Set(['x']), new Set(['x']))).toBe(bySets)
   })
 })
 

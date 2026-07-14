@@ -11,9 +11,15 @@ import { useMemberSenders } from './useMemberSenders'
 
 const mockUseSessions = vi.fn()
 const mockUseMemberAscents = vi.fn()
+const mockSelfSends = vi.fn(() => ({ sentIds: new Set<string>(), loggedIds: new Set<string>() }))
 
 vi.mock('../sessions/sessionsStore', () => ({ useSessions: () => mockUseSessions() }))
-vi.mock('../sessions/memberAscentsStore', () => ({ useMemberAscents: (id: string | null) => mockUseMemberAscents(id) }))
+// Keep the real withSelfSends; only stub the reactive useMemberAscents hook.
+vi.mock('../sessions/memberAscentsStore', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../sessions/memberAscentsStore')>()
+  return { ...actual, useMemberAscents: (id: string | null) => mockUseMemberAscents(id) }
+})
+vi.mock('./useBoardSelfSends', () => ({ useBoardSelfSends: () => mockSelfSends() }))
 
 const board = boardByLayoutId(7)!
 
@@ -33,6 +39,8 @@ beforeEach(() => {
   mockUseSessions.mockReset()
   mockUseMemberAscents.mockReset()
   mockUseMemberAscents.mockReturnValue(ascents())
+  mockSelfSends.mockReset()
+  mockSelfSends.mockReturnValue({ sentIds: new Set(), loggedIds: new Set() })
 })
 
 describe('useMemberSenders (hook)', () => {
@@ -70,5 +78,19 @@ describe('useMemberSenders (hook)', () => {
     withSession(7)
     mockUseMemberAscents.mockReturnValue(ascents())
     expect(renderHook(() => useMemberSenders(board)).result.current!.state).toBe('loading')
+  })
+
+  it('shows self in the pill from the LOCAL logbook even when the projection lacks the send', () => {
+    withSession(7)
+    // Projection: self is a member but its sent set is stale/empty (your fresh send hasn't
+    // round-tripped through session_member_ascents yet).
+    mockUseMemberAscents.mockReturnValue(
+      ascents({ ready: true, members: ['me'], bySets: { me: { sentIds: new Set(), loggedIds: new Set() } } }),
+    )
+    // Local logbook: you just logged a send on P1.
+    mockSelfSends.mockReturnValue({ sentIds: new Set(['P1']), loggedIds: new Set(['P1']) })
+    const chips = renderHook(() => useMemberSenders(board)).result.current!.senders.get('P1')
+    expect(chips?.map((c) => c.userId)).toEqual(['me'])
+    expect(chips?.[0].isSelf).toBe(true)
   })
 })

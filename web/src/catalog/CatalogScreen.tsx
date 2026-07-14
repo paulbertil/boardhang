@@ -40,7 +40,8 @@ import { useProblemDrawer } from './useProblemDrawer'
 import { useEnsureAscentsLoaded } from '../logbook/ascents'
 import { useAuth } from '../auth/AuthProvider'
 import { useSessions } from '../sessions/sessionsStore'
-import { useMemberAscents } from '../sessions/memberAscentsStore'
+import { useMemberAscents, withSelfSends } from '../sessions/memberAscentsStore'
+import { useBoardSelfSends } from './useBoardSelfSends'
 import { useMemberSenders } from './useMemberSenders'
 import type { CatalogProblem } from './catalogSync'
 
@@ -73,7 +74,7 @@ export function CatalogScreen() {
   // Logged sends → the green "sent" check on rows/detail (iOS parity). The ascents
   // store is a global singleton the Logbook tab also feeds; ensure it's loaded here too
   // so the check appears even when the catalog is opened without first visiting the logbook.
-  const { ascents, status: ascentsStatus } = useEnsureAscentsLoaded()
+  const { status: ascentsStatus } = useEnsureAscentsLoaded()
   const { status: authStatus, isRestoring } = useAuth()
   // Two derived gates (see plan KTD5): `statusReady` decides whether the status
   // predicate + count run (needs ascents actually loaded, else a ?status= deep-link
@@ -83,35 +84,17 @@ export function CatalogScreen() {
   const signedIn = authStatus !== 'signedOut'
   const statusReady = signedIn && ascentsStatus === 'loaded'
   const signedOut = !isRestoring && authStatus === 'signedOut'
-  // Board-scoped, mirroring the Logbook tab: a send counts for this board's catalog
-  // only. `sent === false` rows (attempts) are excluded — only true sends get the check.
-  const sentIds = useMemo(
-    () =>
-      new Set(
-        ascents
-          .filter((a) => a.sent && a.boardLayoutId === board.layoutId && a.sourceCatalogId)
-          .map((a) => a.sourceCatalogId as string),
-      ),
-    [ascents, board.layoutId],
-  )
-  // Any ascent (sent OR unsent attempt) → "logged" for the status filter. No `a.sent`
-  // filter, unlike sentIds; a problem in loggedIds but not sentIds is "Attempted".
-  const loggedIds = useMemo(
-    () =>
-      new Set(
-        ascents
-          .filter((a) => a.boardLayoutId === board.layoutId && a.sourceCatalogId)
-          .map((a) => a.sourceCatalogId as string),
-      ),
-    [ascents, board.layoutId],
-  )
+  // Board-scoped self sends/logs from the local logbook — the single source shared by the row
+  // green-check, the session sends pill's self chip, and the session Sent filter (via
+  // withSelfSends below), so those surfaces can't drift and self's fresh send is instant.
+  const { sentIds, loggedIds } = useBoardSelfSends(board)
 
   // ── Collaboration session (board-scoped) ─────────────────────────────────────
   // A session targets one board; only apply it on its own board's catalog. When a session
   // for a different board is active, this passes null so the projection clears here. This
   // read feeds the list PREDICATE (FilterContext.session below); the Filters-sheet UI rows
   // read the same stores directly via useSessionFilterRows (no prop drilling).
-  const { activeSession, memberStatus } = useSessions()
+  const { activeSession, memberStatus, selfId } = useSessions()
   const sessionForBoard =
     activeSession && activeSession.boardLayoutId === board.layoutId ? activeSession : null
   const memberAsc = useMemberAscents(sessionForBoard?.id ?? null)
@@ -206,7 +189,10 @@ export function CatalogScreen() {
             ready: memberAsc.ready,
             members: memberAsc.members,
             memberStatus,
-            sets: memberAsc.bySets,
+            // Self's row reads from the local logbook (instant, authoritative); other members
+            // stay projection-sourced. Presence is projection-driven — self is overridden only
+            // when already in the member set.
+            sets: withSelfSends(memberAsc.bySets, selfId, sentIds, loggedIds),
           }
         : undefined,
     }
@@ -221,6 +207,7 @@ export function CatalogScreen() {
     statusReady,
     sessionForBoard,
     memberStatus,
+    selfId,
     memberAsc.ready,
     memberAsc.members,
     memberAsc.bySets,

@@ -6,7 +6,7 @@ import { dismissLastOpened } from './lastOpenedStore'
 import { addBoard } from '../board/boardStore'
 import { renderWithRouter } from '../test/renderWithRouter'
 import { useSlab } from './useSlab'
-import { useEnsureAscentsLoaded } from '../logbook/ascents'
+import { useAscents, useEnsureAscentsLoaded } from '../logbook/ascents'
 import type { Ascent } from '../logbook/ascents'
 import { useAuth } from '../auth/AuthProvider'
 import type { SavedList } from '../lists/listsTypes'
@@ -87,6 +87,9 @@ vi.mock('./useSlab', () => ({ useSlab: vi.fn() }))
 // exported here (used by ProblemDetail when a problem opens), so the mock keeps it.
 vi.mock('../logbook/ascents', () => ({
   useEnsureAscentsLoaded: vi.fn(() => ({ status: 'loaded', ascents: [], error: null })),
+  // useBoardSelfSends reads useAscents; in the real app both read the same store, so mirror
+  // whatever useEnsureAscentsLoaded is currently mocked to return (the tests set that one).
+  useAscents: vi.fn(),
   addAttemptTries: vi.fn(),
 }))
 
@@ -153,6 +156,9 @@ beforeEach(() => {
   // to their defaults each test (else a signed-in / ascent-heavy test leaks forward).
   vi.mocked(useAuth).mockReturnValue(authValue('signedOut'))
   vi.mocked(useEnsureAscentsLoaded).mockReturnValue({ status: 'loaded', ascents: [], error: null })
+  // useAscents mirrors the current useEnsureAscentsLoaded stub, so a test that sets ascents on
+  // one drives both (the real store backs both hooks; useBoardSelfSends reads useAscents).
+  vi.mocked(useAscents).mockImplementation(() => vi.mocked(useEnsureAscentsLoaded)())
   // Reset the saved-list mocks to their inert defaults so a list-filter test can't leak.
   listsMock.saved = { status: 'loaded', lists: [], error: null }
   listsMock.members = { ids: new Set<string>(), ready: true }

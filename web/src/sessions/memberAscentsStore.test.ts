@@ -26,6 +26,7 @@ import {
   buildMemberSets,
   getMemberAscentsSnapshot,
   refreshMemberAscents,
+  removeMemberFromProjection,
 } from './memberAscentsStore'
 
 beforeEach(() => {
@@ -144,6 +145,24 @@ describe('memberAscentsStore', () => {
     notified = true
     expect(notified).toBe(true)
     expect(getMemberAscentsSnapshot().ready).toBe(false)
+  })
+
+  it('removeMemberFromProjection drops a member from members + bySets (optimistic leave)', async () => {
+    h.rows = [
+      { user_id: 'a', source_catalog_id: 'P1', status: 'sent' },
+      { user_id: 'b', source_catalog_id: 'P2', status: 'sent' },
+    ]
+    activateMemberAscents('S1')
+    await refreshMemberAscents()
+    expect(getMemberAscentsSnapshot().members.sort()).toEqual(['a', 'b'])
+    removeMemberFromProjection('b')
+    const s = getMemberAscentsSnapshot()
+    expect(s.members).toEqual(['a'])
+    expect(s.bySets.b).toBeUndefined()
+    expect(s.ready).toBe(true) // still live — just one member lighter
+    // No-op for an unknown id.
+    removeMemberFromProjection('zzz')
+    expect(getMemberAscentsSnapshot().members).toEqual(['a'])
   })
 
   it('keeps the last-good map and surfaces a non-fatal error on RPC failure', async () => {

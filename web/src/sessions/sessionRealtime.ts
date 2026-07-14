@@ -19,7 +19,7 @@ import { useEffect } from 'react'
 import type { RealtimeChannel } from '@supabase/supabase-js'
 import { toast } from 'sonner'
 import { supabase } from '../supabase/client'
-import { refreshMemberAscents } from './memberAscentsStore'
+import { refreshMemberAscents, removeMemberFromProjection } from './memberAscentsStore'
 import { getSessionsSnapshot, reloadActiveRoster, removeMemberFromRoster } from './sessionsStore'
 import { memberLabel } from './sessionsTypes'
 
@@ -76,6 +76,9 @@ async function onMembershipChange(leftUserId?: string): Promise<void> {
   // the entry captured before removal.
   if (leftUserId) {
     const gone = removeMemberFromRoster(leftUserId)
+    // Drop them from the projection in the SAME tick, so the "who sent this" pills don't briefly
+    // render them profile-less (an initials ghost) while the roster is ahead of the projection.
+    removeMemberFromProjection(leftUserId)
     if (gone && gone.userId !== self) toast(`${memberLabel(gone)} left the session`)
   }
   // Reconcile with the server (adds joiners, confirms the removal) and refetch the projection so

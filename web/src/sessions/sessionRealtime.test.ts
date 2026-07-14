@@ -29,6 +29,7 @@ const h = vi.hoisted(() => ({
   left: [] as RosterMember[],
   roster: [] as RosterMember[],
   rosterRemovals: [] as string[],
+  projectionRemovals: [] as string[],
   selfId: 'self' as string | null,
   toasts: [] as string[],
 }))
@@ -38,6 +39,7 @@ vi.mock('./memberAscentsStore', () => ({
     h.refetchCalls += 1
     return Promise.resolve()
   },
+  removeMemberFromProjection: (id: string) => h.projectionRemovals.push(id),
 }))
 
 vi.mock('./sessionsStore', () => ({
@@ -116,6 +118,7 @@ beforeEach(() => {
   h.left = []
   h.roster = []
   h.rosterRemovals = []
+  h.projectionRemovals = []
   h.selfId = 'self'
   h.toasts = []
 })
@@ -250,6 +253,8 @@ describe('sessionRealtime', () => {
     fire('member-left', { user_id: 'other' })
     await flush()
     expect(h.rosterRemovals).toEqual(['other'])
+    // Dropped from the projection in the same tick, so the sender pills don't ghost an initial.
+    expect(h.projectionRemovals).toEqual(['other'])
     expect(h.toasts).toEqual(['Bob left the session'])
     // The projection refetches on a leave too, so the departed member's sends drop out.
     vi.advanceTimersByTime(NUDGE_DEBOUNCE_MS)

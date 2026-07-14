@@ -164,6 +164,20 @@ export function refreshMemberAscents(): Promise<void> {
   return fetchMemberAscents(currentSessionId)
 }
 
+/**
+ * Optimistically drop a member from the cached projection on a realtime member-left nudge, so the
+ * catalog's "who sent this" pills lose them at the same instant the roster does. Without this the
+ * roster (removed immediately) and this projection (refetched on a debounce) briefly disagree, and
+ * buildSenders renders the departed member with no roster profile — an initials-fallback ghost.
+ * refreshMemberAscents reconciles right after. No-op if the member isn't in the current map.
+ */
+export function removeMemberFromProjection(userId: string): void {
+  if (!state.members.includes(userId)) return
+  const bySets = { ...state.bySets }
+  delete bySets[userId]
+  setState({ ...state, members: state.members.filter((m) => m !== userId), bySets })
+}
+
 // ─── Reactive bindings ────────────────────────────────────────────────────────
 
 function subscribe(listener: () => void): () => void {

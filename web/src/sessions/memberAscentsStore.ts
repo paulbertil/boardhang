@@ -30,6 +30,30 @@ export interface MemberSets {
 /** Per-member Set-pairs, keyed by user-id. */
 export type MemberAscentsMap = Record<string, MemberSets>
 
+/**
+ * Return `bySets` with the self member's set replaced by the LOCAL logbook sets, so every session
+ * surface reads self's sends from the authoritative local store instead of the round-trip
+ * projection (which is stale for your own just-logged send). Presence stays projection-driven:
+ * self is overridden ONLY when already present in `bySets` (i.e. in the projection's member set);
+ * a not-yet-loaded self is not synthesised. Pure — returns a new map, never mutates the input.
+ *
+ * CAVEAT: the "self surfaces can't drift" guarantee is contingent on self being in the projection
+ * member set. While the projection is empty (first load, or a max-age drop → `members: []`), the
+ * pill and the session Sent-filter predicate — both of which iterate `members` — drop self, while
+ * the row green-check (fed directly from local `sentIds`) still shows it. This is masked in
+ * practice (the pill renders nothing during `loading`; the list is widened while `paused`), but
+ * the surfaces are only provably aligned once the projection has loaded self.
+ */
+export function withSelfSends(
+  bySets: MemberAscentsMap,
+  selfId: string | null,
+  sentIds: Set<string>,
+  loggedIds: Set<string>,
+): MemberAscentsMap {
+  if (!selfId || !(selfId in bySets)) return bySets
+  return { ...bySets, [selfId]: { sentIds, loggedIds } }
+}
+
 export interface MemberAscentsState {
   /** Roster known AND projection fetched (single atomic flag — U3). */
   ready: boolean
@@ -162,6 +186,20 @@ export function activateMemberAscents(sessionId: string | null): void {
 export function refreshMemberAscents(): Promise<void> {
   if (!currentSessionId) return Promise.resolve()
   return fetchMemberAscents(currentSessionId)
+}
+
+/**
+ * Optimistically drop a member from the cached projection on a realtime member-left nudge, so the
+ * catalog's "who sent this" pills lose them at the same instant the roster does. Without this the
+ * roster (removed immediately) and this projection (refetched on a debounce) briefly disagree, and
+ * buildSenders renders the departed member with no roster profile — an initials-fallback ghost.
+ * refreshMemberAscents reconciles right after. No-op if the member isn't in the current map.
+ */
+export function removeMemberFromProjection(userId: string): void {
+  if (!state.members.includes(userId)) return
+  const bySets = { ...state.bySets }
+  delete bySets[userId]
+  setState({ ...state, members: state.members.filter((m) => m !== userId), bySets })
 }
 
 // ─── Reactive bindings ────────────────────────────────────────────────────────

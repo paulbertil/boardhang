@@ -58,6 +58,11 @@ begin
   if to_regclass('public.problem_beta_videos') is not null then
     execute 'grant select, insert, update, delete on public.problem_beta_videos to anon, authenticated';
   end if;
+  -- 0012 chain (0002 → 0007): the receive-auth assertions query realtime.messages as
+  -- `authenticated`, and is_session_member reads session_members. RLS still gates rows.
+  if to_regclass('public.session_members') is not null then
+    execute 'grant select on public.sessions, public.session_members to anon, authenticated';
+  end if;
 end $$;
 SQL
 
@@ -86,5 +91,32 @@ run_case "$HERE/0010_problem_beta_videos_rls.sql" "$HERE/../0010_problem_beta_vi
 # 0010 → 0011 chain.
 run_case "$HERE/0011_beta_user_submissions_rls.sql" \
   "$HERE/../0010_problem_beta_videos.sql" "$HERE/../0011_beta_user_submissions.sql"
+
+# 0012: session realtime — the ascents→broadcast fan-out trigger + private-channel receive
+# authorization. Needs ascents (0002) + sessions/session_members/is_session_member (0007), and
+# the realtime-schema stub applied before 0012 so realtime.messages exists for its policy.
+run_case "$HERE/0012_session_realtime_rls.sql" \
+  "$HERE/../0002_logbook_sync.sql" \
+  "$HERE/../0007_collaboration_sessions.sql" \
+  "$HERE/stub_realtime.sql" \
+  "$HERE/../0012_session_realtime.sql"
+
+# 0013: session membership realtime — the session_members join/leave trigger that broadcasts
+# member-joined / member-left on the session:<id> channel. Same chain as 0012 (needs the
+# realtime stub); reuses 0012's receive policy, so 0012 is in the chain too.
+run_case "$HERE/0013_session_membership_realtime_rls.sql" \
+  "$HERE/../0002_logbook_sync.sql" \
+  "$HERE/../0007_collaboration_sessions.sql" \
+  "$HERE/stub_realtime.sql" \
+  "$HERE/../0012_session_realtime.sql" \
+  "$HERE/../0013_session_membership_realtime.sql"
+
+# 0014: session end realtime — the sessions soft-delete trigger that broadcasts session-ended.
+# Needs sessions (0007) + the realtime stub; independent of 0012/0013 (emit-only test).
+run_case "$HERE/0014_session_end_realtime_rls.sql" \
+  "$HERE/../0002_logbook_sync.sql" \
+  "$HERE/../0007_collaboration_sessions.sql" \
+  "$HERE/stub_realtime.sql" \
+  "$HERE/../0014_session_end_realtime.sql"
 
 echo "✅ ALL RLS CASES PASSED"

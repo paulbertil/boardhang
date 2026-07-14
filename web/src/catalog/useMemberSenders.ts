@@ -10,9 +10,10 @@
 import { useMemo } from 'react'
 import type { CatalogBoardDef } from '../board/boards'
 import { useSessions } from '../sessions/sessionsStore'
-import { useMemberAscents } from '../sessions/memberAscentsStore'
+import { useMemberAscents, withSelfSends } from '../sessions/memberAscentsStore'
 import type { MemberAscentsMap } from '../sessions/memberAscentsStore'
 import { memberInitials, memberLabel, type SessionMember } from '../sessions/sessionsTypes'
+import { useBoardSelfSends } from './useBoardSelfSends'
 
 /** One sender chip in a row's sends pill — a crew member (self included) who sent that problem. */
 export interface SenderChip {
@@ -87,15 +88,20 @@ export function useMemberSenders(board: CatalogBoardDef): MemberSendersUI | unde
   const sessionForBoard =
     activeSession && activeSession.boardLayoutId === board.layoutId ? activeSession : null
   const memberAsc = useMemberAscents(sessionForBoard?.id ?? null)
+  // Self's send set comes from the local logbook (instant) so your own send shows in the pill the
+  // moment you log it, matching the row green-check and the Sent filter; others stay projection-
+  // sourced.
+  const { sentIds, loggedIds } = useBoardSelfSends(board)
 
   return useMemo<MemberSendersUI | undefined>(() => {
     if (!sessionForBoard) return undefined
-    const senders = buildSenders(memberAsc.members, selfId, memberAsc.bySets, roster)
+    const bySets = withSelfSends(memberAsc.bySets, selfId, sentIds, loggedIds)
+    const senders = buildSenders(memberAsc.members, selfId, bySets, roster)
     const state: MemberSendersUI['state'] = memberAsc.ready
       ? 'ready'
       : memberAsc.stale || memberAsc.error
         ? 'paused'
         : 'loading'
     return { senders, state }
-  }, [sessionForBoard, roster, selfId, memberAsc.members, memberAsc.bySets, memberAsc.ready, memberAsc.stale, memberAsc.error])
+  }, [sessionForBoard, roster, selfId, memberAsc.members, memberAsc.bySets, sentIds, loggedIds, memberAsc.ready, memberAsc.stale, memberAsc.error])
 }

@@ -213,6 +213,39 @@ async function loadRoster(session: Session, gen: number): Promise<void> {
   setState({ roster })
 }
 
+/**
+ * Reload the active session's roster in response to a realtime membership nudge (0013) — drives
+ * the live member avatars in SessionBar. Returns the delta vs the previous roster: `joined` are
+ * new entries (for a "joined" toast), `left` are entries that disappeared (for a "left" toast —
+ * captured from the OLD roster, since they're gone from the reloaded one). Both empty when there
+ * is no active session.
+ */
+export async function reloadActiveRoster(): Promise<{ joined: SessionMember[]; left: SessionMember[] }> {
+  const active = state.activeSession
+  if (!active) return { joined: [], left: [] }
+  const before = state.roster
+  const beforeIds = new Set(before.map((m) => m.userId))
+  await loadRoster(active, generation)
+  const afterIds = new Set(state.roster.map((m) => m.userId))
+  return {
+    joined: state.roster.filter((m) => !beforeIds.has(m.userId)),
+    left: before.filter((m) => !afterIds.has(m.userId)),
+  }
+}
+
+/**
+ * Optimistically drop a member from the active roster on a realtime member-left nudge, so their
+ * avatar disappears instantly instead of lingering for the reloadActiveRoster round-trip.
+ * Idempotent; reloadActiveRoster reconciles with the server right after. Returns the removed
+ * member (for a "left" toast), or null if they weren't in the roster.
+ */
+export function removeMemberFromRoster(userId: string): SessionMember | null {
+  const gone = state.roster.find((m) => m.userId === userId)
+  if (!gone) return null
+  setState({ roster: state.roster.filter((m) => m.userId !== userId) })
+  return gone
+}
+
 // ─── Lifecycle ────────────────────────────────────────────────────────────────
 
 /**
@@ -304,6 +337,14 @@ export async function getInviteToken(sessionId?: string): Promise<string> {
   return token
 }
 
+/** End the active session locally WITHOUT a server call — for when the server has already removed
+ *  us (the owner kicked us; the membership row is gone). Clears the in-memory session + its
+ *  persisted pointer, exactly like a leave, but skips the redundant self-DELETE. */
+export function endActiveSessionLocally(): void {
+  const active = state.activeSession
+  if (active) retire(active.id)
+}
+
 /** Leave the active session — deletes only the caller's own membership (revokes just your
  *  sharing, R16) and drops the session locally. Others' membership is unaffected. */
 export async function leaveSession(): Promise<void> {
@@ -318,6 +359,22 @@ export async function leaveSession(): Promise<void> {
         .match({ session_id: active.id, user_id: userId })
       if (error) throw new Error(error.message)
     }
+  }
+  retire(active.id)
+}
+
+/**
+ * End the active session for EVERYONE (owner-only) — soft-deletes the session row. Every member's
+ * client then retires it at once via the 0014 session-ended broadcast (with the expiry/reconcile
+ * backstop for anyone offline). RLS grants sessions UPDATE to the owner only, so a non-owner's
+ * update matches zero rows server-side; the UI only offers this to the owner. Drops it locally too.
+ */
+export async function endSession(): Promise<void> {
+  const active = state.activeSession
+  if (!active) return
+  if (supabase) {
+    const { error } = await supabase.from('sessions').update({ deleted: true }).eq('id', active.id)
+    if (error) throw new Error(error.message)
   }
   retire(active.id)
 }

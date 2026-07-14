@@ -217,6 +217,9 @@ describe('sessionRealtime', () => {
     await flush()
     expect(h.rosterReloads).toBe(1)
     expect(h.toasts).toEqual(['Sofia joined the session'])
+    // The projection must refetch too, so the joiner's sent/tried status shows without a refresh.
+    vi.advanceTimersByTime(NUDGE_DEBOUNCE_MS)
+    expect(h.refetchCalls).toBe(1)
   })
 
   it('member-joined does not toast for our own join (still reloads the roster)', async () => {
@@ -237,6 +240,9 @@ describe('sessionRealtime', () => {
     await flush()
     expect(h.rosterReloads).toBe(1)
     expect(h.toasts).toEqual(['Bob left the session'])
+    // The projection refetches on a leave too, so the departed member's sends drop out.
+    vi.advanceTimersByTime(NUDGE_DEBOUNCE_MS)
+    expect(h.refetchCalls).toBe(1)
   })
 
   it('does not toast our own departure', async () => {

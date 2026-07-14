@@ -67,6 +67,10 @@ function onNudge(author: string | undefined): void {
  */
 async function onMembershipChange(): Promise<void> {
   const { joined, left } = await reloadActiveRoster()
+  // The roster changed, so the cross-member projection changed too: a joiner brings a sent/tried
+  // set the cached projection doesn't have yet, and a leaver's should drop. Refetch so the
+  // catalog's "who sent this" updates without a manual refresh. Debounced + no-op off-catalog.
+  scheduleRefetch()
   const self = getSessionsSnapshot().selfId
   for (const m of joined) {
     if (m.userId !== self) toast(`${memberLabel(m)} joined the session`)

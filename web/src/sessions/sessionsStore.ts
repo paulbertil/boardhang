@@ -337,6 +337,14 @@ export async function getInviteToken(sessionId?: string): Promise<string> {
   return token
 }
 
+/** End the active session locally WITHOUT a server call — for when the server has already removed
+ *  us (the owner kicked us; the membership row is gone). Clears the in-memory session + its
+ *  persisted pointer, exactly like a leave, but skips the redundant self-DELETE. */
+export function endActiveSessionLocally(): void {
+  const active = state.activeSession
+  if (active) retire(active.id)
+}
+
 /** Leave the active session — deletes only the caller's own membership (revokes just your
  *  sharing, R16) and drops the session locally. Others' membership is unaffected. */
 export async function leaveSession(): Promise<void> {

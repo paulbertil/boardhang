@@ -20,7 +20,12 @@ import type { RealtimeChannel } from '@supabase/supabase-js'
 import { toast } from 'sonner'
 import { supabase } from '../supabase/client'
 import { refreshMemberAscents, removeMemberFromProjection } from './memberAscentsStore'
-import { getSessionsSnapshot, reloadActiveRoster, removeMemberFromRoster } from './sessionsStore'
+import {
+  endActiveSessionLocally,
+  getSessionsSnapshot,
+  reloadActiveRoster,
+  removeMemberFromRoster,
+} from './sessionsStore'
 import { memberLabel } from './sessionsTypes'
 
 /** Coalesce a burst of nudges into a single refetch. */
@@ -70,7 +75,16 @@ function onNudge(author: string | undefined): void {
  * in one reload still narrates both. Best-effort — a failed reload keeps the last-good roster.
  */
 async function onMembershipChange(leftUserId?: string): Promise<void> {
-  const self = getSessionsSnapshot().selfId
+  const snap = getSessionsSnapshot()
+  const self = snap.selfId
+  // A member-left about MYSELF while my session is still active means the owner kicked me (a
+  // voluntary leave already retired the session locally before this echo arrives). End the
+  // session for me — otherwise the bar lingers with a roster I can no longer read (RLS).
+  if (leftUserId && leftUserId === self && snap.activeSession) {
+    endActiveSessionLocally()
+    toast('You were removed from the session')
+    return
+  }
   // A member-left nudge carries the departed user_id: drop them from the roster immediately so
   // their avatar disappears at once, instead of lingering for the reload round-trip. Toast from
   // the entry captured before removal.

@@ -30,6 +30,8 @@ const h = vi.hoisted(() => ({
   roster: [] as RosterMember[],
   rosterRemovals: [] as string[],
   projectionRemovals: [] as string[],
+  activeSession: null as { id: string } | null,
+  endedLocally: false,
   selfId: 'self' as string | null,
   toasts: [] as string[],
 }))
@@ -47,11 +49,14 @@ vi.mock('./sessionsStore', () => ({
     h.rosterReloads += 1
     return Promise.resolve({ joined: h.joined, left: h.left })
   },
-  getSessionsSnapshot: () => ({ selfId: h.selfId, roster: h.roster }),
+  getSessionsSnapshot: () => ({ selfId: h.selfId, roster: h.roster, activeSession: h.activeSession }),
   removeMemberFromRoster: (id: string) => {
     const m = h.roster.find((r) => r.userId === id) ?? null
     if (m) h.rosterRemovals.push(id)
     return m
+  },
+  endActiveSessionLocally: () => {
+    h.endedLocally = true
   },
 }))
 
@@ -119,6 +124,8 @@ beforeEach(() => {
   h.roster = []
   h.rosterRemovals = []
   h.projectionRemovals = []
+  h.activeSession = null
+  h.endedLocally = false
   h.selfId = 'self'
   h.toasts = []
 })
@@ -259,6 +266,18 @@ describe('sessionRealtime', () => {
     // The projection refetches on a leave too, so the departed member's sends drop out.
     vi.advanceTimersByTime(NUDGE_DEBOUNCE_MS)
     expect(h.refetchCalls).toBe(1)
+  })
+
+  it('ends the session for me when I am the one removed (member-left about self, still active)', async () => {
+    h.activeSession = { id: 'S1' } // still active → I was kicked (a voluntary leave already retired)
+    activateSessionRealtime('S1')
+    await flush()
+    fire('member-left', { user_id: 'self' })
+    await flush()
+    expect(h.endedLocally).toBe(true)
+    expect(h.toasts).toEqual(['You were removed from the session'])
+    expect(h.rosterRemovals).toEqual([]) // returned early — no roster churn, no reload
+    expect(h.rosterReloads).toBe(0)
   })
 
   it('member-left with no payload falls back to the roster diff for the toast', async () => {

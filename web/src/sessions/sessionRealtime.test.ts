@@ -11,7 +11,7 @@ interface RosterMember {
 interface FakeChannel {
   name: string
   opts: { config?: { private?: boolean } }
-  handlers: Record<string, (msg: { payload?: { author?: string } }) => void>
+  handlers: Record<string, (msg: { payload?: { author?: string; user_id?: string } }) => void>
   subscribed: boolean
 }
 
@@ -27,6 +27,8 @@ const h = vi.hoisted(() => ({
   rosterReloads: 0,
   joined: [] as RosterMember[],
   left: [] as RosterMember[],
+  roster: [] as RosterMember[],
+  rosterRemovals: [] as string[],
   selfId: 'self' as string | null,
   toasts: [] as string[],
 }))
@@ -43,7 +45,12 @@ vi.mock('./sessionsStore', () => ({
     h.rosterReloads += 1
     return Promise.resolve({ joined: h.joined, left: h.left })
   },
-  getSessionsSnapshot: () => ({ selfId: h.selfId }),
+  getSessionsSnapshot: () => ({ selfId: h.selfId, roster: h.roster }),
+  removeMemberFromRoster: (id: string) => {
+    const m = h.roster.find((r) => r.userId === id) ?? null
+    if (m) h.rosterRemovals.push(id)
+    return m
+  },
 }))
 
 vi.mock('./sessionsTypes', () => ({
@@ -92,7 +99,7 @@ async function flush(): Promise<void> {
 }
 
 /** Fire a broadcast for the given event on the (only) open channel. */
-function fire(event: string, payload?: { author?: string }): void {
+function fire(event: string, payload?: { author?: string; user_id?: string }): void {
   h.channels[0].handlers[event]?.({ payload })
 }
 
@@ -107,6 +114,8 @@ beforeEach(() => {
   h.rosterReloads = 0
   h.joined = []
   h.left = []
+  h.roster = []
+  h.rosterRemovals = []
   h.selfId = 'self'
   h.toasts = []
 })
@@ -232,17 +241,30 @@ describe('sessionRealtime', () => {
     expect(h.toasts).toEqual([])
   })
 
-  it('member-left reloads the roster and toasts the departed member by name', async () => {
-    h.left = [{ userId: 'other', displayName: 'Bob', handle: null, avatarUrl: null, joinedAt: '' }]
+  it('member-left with a user_id removes the member instantly and toasts by name', async () => {
+    // The optimistic path: the payload names the leaver, so their avatar is dropped from the
+    // roster at once (before the reload round-trip) and the toast comes from the captured entry.
+    h.roster = [{ userId: 'other', displayName: 'Bob', handle: null, avatarUrl: null, joinedAt: '' }]
     activateSessionRealtime('S1')
     await flush()
-    fire('member-left')
+    fire('member-left', { user_id: 'other' })
     await flush()
-    expect(h.rosterReloads).toBe(1)
+    expect(h.rosterRemovals).toEqual(['other'])
     expect(h.toasts).toEqual(['Bob left the session'])
     // The projection refetches on a leave too, so the departed member's sends drop out.
     vi.advanceTimersByTime(NUDGE_DEBOUNCE_MS)
     expect(h.refetchCalls).toBe(1)
+  })
+
+  it('member-left with no payload falls back to the roster diff for the toast', async () => {
+    h.left = [{ userId: 'other', displayName: 'Bob', handle: null, avatarUrl: null, joinedAt: '' }]
+    activateSessionRealtime('S1')
+    await flush()
+    fire('member-left') // no payload → no optimistic removal; reconcile via the diff
+    await flush()
+    expect(h.rosterRemovals).toEqual([])
+    expect(h.rosterReloads).toBe(1)
+    expect(h.toasts).toEqual(['Bob left the session'])
   })
 
   it('does not toast our own departure', async () => {

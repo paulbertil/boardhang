@@ -233,6 +233,19 @@ export async function reloadActiveRoster(): Promise<{ joined: SessionMember[]; l
   }
 }
 
+/**
+ * Optimistically drop a member from the active roster on a realtime member-left nudge, so their
+ * avatar disappears instantly instead of lingering for the reloadActiveRoster round-trip.
+ * Idempotent; reloadActiveRoster reconciles with the server right after. Returns the removed
+ * member (for a "left" toast), or null if they weren't in the roster.
+ */
+export function removeMemberFromRoster(userId: string): SessionMember | null {
+  const gone = state.roster.find((m) => m.userId === userId)
+  if (!gone) return null
+  setState({ roster: state.roster.filter((m) => m.userId !== userId) })
+  return gone
+}
+
 // ─── Lifecycle ────────────────────────────────────────────────────────────────
 
 /**

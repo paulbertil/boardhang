@@ -20,7 +20,7 @@ import type { RealtimeChannel } from '@supabase/supabase-js'
 import { toast } from 'sonner'
 import { supabase } from '../supabase/client'
 import { refreshMemberAscents } from './memberAscentsStore'
-import { getSessionsSnapshot, reloadActiveRoster } from './sessionsStore'
+import { getSessionsSnapshot, reloadActiveRoster, removeMemberFromRoster } from './sessionsStore'
 import { memberLabel } from './sessionsTypes'
 
 /** Coalesce a burst of nudges into a single refetch. */
@@ -33,6 +33,10 @@ const MEMBER_LEFT_EVENT = 'member-left'
 
 interface NudgePayload {
   author?: string
+}
+
+interface MembershipPayload {
+  user_id?: string
 }
 
 let currentSessionId: string | null = null
@@ -65,18 +69,28 @@ function onNudge(author: string | undefined): void {
  * Toasting off the actual roster delta (not the event name) means a burst that adds and removes
  * in one reload still narrates both. Best-effort — a failed reload keeps the last-good roster.
  */
-async function onMembershipChange(): Promise<void> {
-  const { joined, left } = await reloadActiveRoster()
-  // The roster changed, so the cross-member projection changed too: a joiner brings a sent/tried
-  // set the cached projection doesn't have yet, and a leaver's should drop. Refetch so the
-  // catalog's "who sent this" updates without a manual refresh. Debounced + no-op off-catalog.
-  scheduleRefetch()
+async function onMembershipChange(leftUserId?: string): Promise<void> {
   const self = getSessionsSnapshot().selfId
+  // A member-left nudge carries the departed user_id: drop them from the roster immediately so
+  // their avatar disappears at once, instead of lingering for the reload round-trip. Toast from
+  // the entry captured before removal.
+  if (leftUserId) {
+    const gone = removeMemberFromRoster(leftUserId)
+    if (gone && gone.userId !== self) toast(`${memberLabel(gone)} left the session`)
+  }
+  // Reconcile with the server (adds joiners, confirms the removal) and refetch the projection so
+  // the catalog's "who sent this" tracks the roster — a joiner brings a sent/tried set the cache
+  // doesn't have yet, a leaver's should drop. Debounced + no-op off-catalog. Joiners surface as
+  // new roster entries; a leave with no payload (shouldn't happen) falls back to the `left` diff.
+  const { joined, left } = await reloadActiveRoster()
+  scheduleRefetch()
   for (const m of joined) {
     if (m.userId !== self) toast(`${memberLabel(m)} joined the session`)
   }
-  for (const m of left) {
-    if (m.userId !== self) toast(`${memberLabel(m)} left the session`)
+  if (!leftUserId) {
+    for (const m of left) {
+      if (m.userId !== self) toast(`${memberLabel(m)} left the session`)
+    }
   }
 }
 
@@ -122,9 +136,9 @@ export function activateSessionRealtime(sessionId: string | null): void {
         if (myToken !== activationToken) return
         void onMembershipChange()
       })
-      ch.on('broadcast', { event: MEMBER_LEFT_EVENT }, () => {
+      ch.on('broadcast', { event: MEMBER_LEFT_EVENT }, (msg: { payload?: MembershipPayload }) => {
         if (myToken !== activationToken) return
-        void onMembershipChange()
+        void onMembershipChange(msg.payload?.user_id)
       })
       ch.subscribe()
       channel = ch

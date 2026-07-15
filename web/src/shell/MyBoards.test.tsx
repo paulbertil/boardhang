@@ -39,15 +39,15 @@ describe('MyBoards', () => {
     expect(screen.getAllByRole('button', { name: 'Add' })).toHaveLength(5)
   })
 
-  it('offers Scan to join with no active session (including first-run)', () => {
+  it('offers Join a session with no active session (including first-run)', () => {
     render(<MyBoards onActivated={() => {}} />)
-    expect(screen.getByRole('button', { name: 'Scan to join a session' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Join a session' })).toBeInTheDocument()
   })
 
-  it('hides Scan to join while a session is active', () => {
+  it('hides Join a session while a session is active', () => {
     h.activeSession = { id: 'S1', boardLayoutId: 7 }
     render(<MyBoards onActivated={() => {}} />)
-    expect(screen.queryByRole('button', { name: 'Scan to join a session' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Join a session' })).not.toBeInTheDocument()
   })
 
   it('makes the first owned board active, and Browse opens its catalog', () => {

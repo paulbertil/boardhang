@@ -4,7 +4,7 @@
 // DIFFERENT board is active it renders nothing (the global pill surfaces that one).
 
 import { useCallback, useRef, useState } from 'react'
-import { MoreHorizontal, RefreshCw, Share2, Users, X } from 'lucide-react'
+import { MoreHorizontal, Plus, RefreshCw, Share2, Users, X } from 'lucide-react'
 import type { CatalogBoardDef } from '../board/boards'
 import { boardShortLabel } from '../lists/listsTypes'
 import { useAuth } from '../auth/AuthProvider'
@@ -67,8 +67,8 @@ function StartBar({
 }) {
   const [starting, setStarting] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  // The single "Session" button opens the scanner-first launcher: it opens on the camera to
-  // join, with "Start your own session" as the demoted host path inside the same dialog.
+  // The icon button opens the scanner-first launcher: it opens on the camera to join, with
+  // "Start your own session" as the demoted host path inside the same dialog.
   const [open, setOpen] = useState(false)
 
   const start = useCallback(async () => {
@@ -90,12 +90,19 @@ function StartBar({
     <div className="flex items-center justify-between gap-3 border-b border-border bg-muted/60 px-3 py-2 text-sm">
       <span className="flex min-w-0 items-center gap-2 text-muted-foreground">
         <Users className="size-4 shrink-0" />
-        <span className="truncate">Filter with friends</span>
+        <span className="truncate">Session with friends</span>
       </span>
       <div className="flex items-center gap-2">
         {error && <span className="truncate text-xs text-destructive">{error}</span>}
-        <Button size="sm" onClick={() => setOpen(true)}>
-          Session
+        <Button
+          variant="outline"
+          size="icon"
+          className="size-8"
+          onClick={() => setOpen(true)}
+          aria-label="Start or join a session"
+          title="Start or join a session"
+        >
+          <Plus className="size-4" />
         </Button>
 
         <ScanToJoin

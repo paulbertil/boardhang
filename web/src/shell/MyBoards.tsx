@@ -66,7 +66,7 @@ export function MyBoards({ onActivated }: MyBoardsProps) {
       {!activeSession && (
         <ScanToJoinButton variant="outline" className="w-full">
           <ScanQrCode className="size-4" />
-          Scan to join a session
+          Join a session
         </ScanToJoinButton>
       )}
       {addedBoards.length === 0 ? (

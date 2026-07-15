@@ -79,10 +79,24 @@ beforeEach(() => {
 })
 afterEach(() => vi.restoreAllMocks())
 
+/** Open on the chooser, then tap "Scan a QR code" to start the camera. */
+async function enterScanning() {
+  fireEvent.click(screen.getByRole('button', { name: /scan a qr code/i }))
+  await screen.findByTestId('fake-scanner')
+}
+
 describe('ScanToJoin', () => {
-  it('navigates to the join route and closes the drawer on a valid scanned QR', async () => {
+  it('opens on the chooser (paste + scan), not the camera', () => {
     render(<Harness />)
-    await screen.findByTestId('fake-scanner')
+    expect(screen.getByRole('button', { name: /scan a qr code/i })).toBeInTheDocument()
+    expect(screen.getByLabelText('Session link')).toBeInTheDocument()
+    // camera has NOT started until the user asks for it
+    expect(screen.queryByTestId('fake-scanner')).not.toBeInTheDocument()
+  })
+
+  it('navigates and closes on a valid scanned QR', async () => {
+    render(<Harness />)
+    await enterScanning()
 
     act(() => h.onScanRef.current?.([{ rawValue: JOIN_URL }]))
 
@@ -91,29 +105,22 @@ describe('ScanToJoin', () => {
       params: { token: 'tok-xyz' },
     })
     expect(h.onOpenChange).toHaveBeenCalledWith(false)
-    // drawer closed → scanner torn down
     expect(screen.queryByTestId('fake-scanner')).not.toBeInTheDocument()
-    // ...and the fallback card must NOT flash while the drawer animates out
-    expect(screen.queryByText(/camera unavailable/i)).not.toBeInTheDocument()
   })
 
   it('keeps scanning and shows a transient hint for a non-session QR', async () => {
     render(<Harness />)
-    await screen.findByTestId('fake-scanner')
+    await enterScanning()
 
     act(() => h.onScanRef.current?.([{ rawValue: 'WIFI:S:Gym;T:WPA;P:secret;;' }]))
 
     expect(screen.getByText('Not a session code')).toBeInTheDocument()
     expect(h.navigate).not.toHaveBeenCalled()
-    // still scanning
     expect(screen.getByTestId('fake-scanner')).toBeInTheDocument()
   })
 
-  it('navigates when a valid link is pasted in the fallback', async () => {
+  it('navigates when a valid link is pasted in the chooser', () => {
     render(<Harness />)
-    await screen.findByTestId('fake-scanner')
-    fireEvent.click(screen.getByRole('button', { name: /enter the link instead/i }))
-
     fireEvent.change(screen.getByLabelText('Session link'), { target: { value: `  ${JOIN_URL} ` } })
     fireEvent.click(screen.getByRole('button', { name: 'Join' }))
 
@@ -123,11 +130,8 @@ describe('ScanToJoin', () => {
     })
   })
 
-  it('shows an inline hint for an invalid pasted value, without navigating', async () => {
+  it('shows an inline hint for an invalid pasted value, without navigating', () => {
     render(<Harness />)
-    await screen.findByTestId('fake-scanner')
-    fireEvent.click(screen.getByRole('button', { name: /enter the link instead/i }))
-
     fireEvent.change(screen.getByLabelText('Session link'), { target: { value: 'not-a-link' } })
     fireEvent.click(screen.getByRole('button', { name: 'Join' }))
 
@@ -135,53 +139,54 @@ describe('ScanToJoin', () => {
     expect(h.navigate).not.toHaveBeenCalled()
   })
 
-  it('falls back to paste when the decoder chunk/WASM fails to load (offline)', async () => {
+  it('drops back to the chooser when the decoder fails to load (offline)', async () => {
     h.ensureDecoder.mockRejectedValue(new Error('offline'))
     render(<Harness />)
+    fireEvent.click(screen.getByRole('button', { name: /scan a qr code/i }))
 
-    expect(await screen.findByLabelText('Session link')).toBeInTheDocument()
-    expect(screen.getByText(/camera unavailable/i)).toBeInTheDocument()
+    expect(await screen.findByText(/camera unavailable/i)).toBeInTheDocument()
+    // the paste field is still right there
+    expect(screen.getByLabelText('Session link')).toBeInTheDocument()
     expect(screen.queryByTestId('fake-scanner')).not.toBeInTheDocument()
   })
 
-  it('falls back to paste when the camera reports an error mid-scan', async () => {
+  it('drops back to the chooser when the camera reports an error mid-scan', async () => {
     render(<Harness />)
-    await screen.findByTestId('fake-scanner')
+    await enterScanning()
 
     act(() => h.onErrorRef.current?.())
 
     expect(await screen.findByLabelText('Session link')).toBeInTheDocument()
+    expect(screen.getByText(/camera unavailable/i)).toBeInTheDocument()
   })
 
-  it('recovers the scanner on retry after a first failed load', async () => {
+  it('recovers the scanner on a second scan attempt after a first failed load', async () => {
     h.ensureDecoder.mockRejectedValueOnce(new Error('offline')).mockResolvedValue(undefined)
     render(<Harness />)
 
-    // first load failed → fallback
-    await screen.findByLabelText('Session link')
-    fireEvent.click(screen.getByRole('button', { name: /try camera/i }))
+    // first scan attempt fails → back on the chooser
+    fireEvent.click(screen.getByRole('button', { name: /scan a qr code/i }))
+    await screen.findByText(/camera unavailable/i)
 
-    // fresh load succeeds (proves a per-attempt loader, not a memoized rejection)
+    // second attempt succeeds (proves a per-attempt loader, not a memoized rejection)
+    fireEvent.click(screen.getByRole('button', { name: /scan a qr code/i }))
     await waitFor(() => expect(screen.getByTestId('fake-scanner')).toBeInTheDocument())
   })
 
-  it('is camera-only (no host action) when onStart is absent', async () => {
+  it('is join-only (no host action) when onStart is absent', () => {
     render(<Harness />)
-    await screen.findByTestId('fake-scanner')
     expect(screen.queryByRole('button', { name: /start your own session/i })).not.toBeInTheDocument()
   })
 
-  it('surfaces the host action when onStart is provided, and invokes it', async () => {
+  it('surfaces the host action when onStart is provided, and invokes it', () => {
     const onStart = vi.fn()
     render(<Harness onStart={onStart} canStart />)
-    await screen.findByTestId('fake-scanner')
     fireEvent.click(screen.getByRole('button', { name: /start your own session/i }))
     expect(onStart).toHaveBeenCalled()
   })
 
-  it('disables the host action when the user cannot start (signed out)', async () => {
+  it('disables the host action when the user cannot start (signed out)', () => {
     render(<Harness onStart={vi.fn()} canStart={false} />)
-    await screen.findByTestId('fake-scanner')
     expect(screen.getByRole('button', { name: /start your own session/i })).toBeDisabled()
   })
 })

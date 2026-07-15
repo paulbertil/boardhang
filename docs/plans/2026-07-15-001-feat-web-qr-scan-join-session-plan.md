@@ -23,7 +23,7 @@ execution: code
 
 ### Summary
 
-Session sharing already renders a QR of the join URL (`ShareSession`), but the joiner must use their phone's camera app to scan it. This adds an in-app scanner-first launcher: the catalog's single "Session" button opens a centered dialog **straight to the camera** — a friend's session QR in frame auto-joins — with "Start your own session" demoted below the viewfinder as the host path. The boards overview offers the same launcher camera-only (no board context to host in). The scanner is a thin camera→token→navigate layer; auth, consent, and joining stay owned by `/session/join/$token`.
+Session sharing already renders a QR of the join URL (`ShareSession`), but the joiner must use their phone's camera app to scan it. This adds an in-app session launcher: the catalog's single `+` button opens a centered dialog with a **chooser** — scan a friend's QR, paste their link, or start your own — and the in-app camera opens only when the user taps "Scan a QR code" (so opening the launcher never prompts for camera permission on its own). A decoded or pasted session QR navigates to the existing join route. The boards overview offers the same launcher join-only (no board context to host in). The scanner is a thin camera→token→navigate layer; auth, consent, and joining stay owned by `/session/join/$token`.
 
 ### Problem Frame
 
@@ -33,15 +33,15 @@ The joiner is standing at the wall next to the sharer, often already inside the 
 
 **Entry & visibility**
 
-- R1. The catalog `StartBar` shows a single "Session" button that opens the launcher; it renders only when no session is active (the existing `StartBar`/`ActiveBar` swap gives this for free). The boards overview shows a "Scan to join a session" button (camera-only launcher) that hides while a session is active.
+- R1. The catalog `StartBar` shows a single `+` icon button (outline, aria-label "Start or join a session") that opens the launcher; it renders only when no session is active (the existing `StartBar`/`ActiveBar` swap gives this for free). The boards overview shows a "Join a session" button (join-only launcher) that hides while a session is active.
 - R2. The launcher's join path is usable while signed out — the join route owns sign-in (token survives via its existing sessionStorage resume). Only the host action ("Start your own session") requires sign-in; it is disabled with a hint when signed out.
 
 **Launcher surface**
 
-- R3. The launcher is a centered dialog (shared `Dialog` primitive) that opens **scanner-first**: the camera viewfinder is the primary content with a framing overlay to aid aiming. When a host action is provided (catalog), an "or" divider + "Start your own session" button sit below the viewfinder. Rear camera (`facingMode: 'environment'`) is the hard default; no torch button, no camera-flip in v1.
+- R3. The launcher is a centered dialog (shared `Dialog` primitive) that opens on a **chooser**: a "Scan a QR code" button, a paste-link field, and — when a host action is provided (catalog) — an "or" divider + "Start your own session" button. Tapping "Scan a QR code" reveals the camera viewfinder (framing overlay, rear camera `facingMode: 'environment'`; no torch, no camera-flip in v1) with a "Back" affordance to return to the chooser. The camera starts only on that tap, so opening the launcher does not request camera permission.
 - R4. A decoded QR whose URL path matches `/session/join/:token` — **any origin** — closes the dialog and navigates internally to `/session/join/$token`. The scanned origin is never navigated to; only the token is used.
 - R5. A decoded QR that is not a session link shows a transient "Not a session code" hint and keeps scanning.
-- R6. Camera denied or unavailable is never a dead end: the dialog swaps to a short explanation plus a paste-link input that accepts a join URL (same parser as R4) and navigates, with a retry affordance where the platform allows re-prompting. An invalid or unparseable pasted value shows the same inline "Not a session code" feedback as R5's scan miss, without navigating.
+- R6. Joining is never camera-dependent: the paste-link field lives on the chooser alongside the scan option and accepts a join URL (same parser as R4). If the camera is denied or unavailable (or the decoder fails to load offline), scanning drops back to the chooser with a "Camera unavailable — paste the link instead" note; the paste field is right there. An invalid or unparseable pasted value shows the same "Not a session code" feedback as R5's scan miss, without navigating.
 
 **Join semantics (unchanged)**
 
@@ -81,30 +81,30 @@ The joiner is standing at the wall next to the sharer, often already inside the 
 - KTD-3. **Exclude the WASM from the service-worker precache** (workbox `globIgnores` in `vite.config.ts`). Precaching would add ~1 MiB to every install for a feature most users touch rarely — and scanning is inherently online anyway (the join RPC needs the network). Because workbox precaches the lazy JS chunk regardless, the WASM prep is a **retryable runtime step** (`ensureDecoder()`, awaited by the scanner loader), not a top-level await: a top-level await would put the whole module record into a permanently-errored state on an offline fetch, so no retry could recover it. `ensureDecoder` memoizes success and clears the memo on failure, so an offline open routes to the R6 fallback and a later retry recovers instead of leaving a viewfinder that silently never decodes. Add a workbox `runtimeCaching` CacheFirst route for `*.wasm` so repeat scanner opens don't re-download ~433 kB and stay decodable offline.
 - KTD-4. **The scanner is a thin layer: decode → parse → navigate.** No auth, consent, or join logic; `/session/join/$token` owns all of it (preserves origin R8/R9 with zero duplication). The only scanner-owned states are camera states.
 - KTD-5. **Lazy boundary = the scanner content module.** The trigger button and dialog shell are eager (tiny); `qrDecoder.ts` (which imports `@yudiel/react-qr-scanner`) loads via a dynamic `import()` when the dialog opens, with a spinner fallback and an error state (offline load failure → same never-a-dead-end paste fallback as R6). First dynamic import in the app; no Vite config needed for the split itself. The load is driven by a manual `import()`-in-state loader keyed per attempt, **not** `React.lazy`: `React.lazy` memoizes a rejected import permanently, so its retry edge is unrecoverable. The manual loader re-runs `import('./qrDecoder')` then `ensureDecoder()` on each attempt, so retry recovers a previously-failed chunk or WASM fetch.
-- KTD-7. **Scanner-first with the host action folded into the same dialog.** The launcher opens on the camera because joining is the time-sensitive at-the-wall act; hosting is the rarer role, so it is one demoted button below an "or" divider rather than an equal choice. The camera view and the host action live in one `Dialog` (no nested overlays). Tradeoff accepted: opening the dialog fires the camera-permission prompt for everyone, including a would-be host — mitigated by the always-visible Start button and the paste fallback. `ScanToJoin` takes an optional `onStart`/`starting`/`canStart`; when absent (boards overview) the dialog is camera-only.
+- KTD-7. **Chooser-first, camera on demand.** The launcher opens on a chooser (scan / paste / optional start) rather than the camera, so merely opening it never triggers the OS camera-permission prompt — the earlier scanner-first variant fired that prompt for everyone, including a would-be host. `getUserMedia` runs only after "Scan a QR code". Paste is a first-class peer of scanning (always visible), which also makes it the natural fallback when the camera is denied or the decoder can't load offline. Scan, paste, and the optional host action live in one `Dialog` (no nested overlays). `ScanToJoin` takes an optional `onStart`/`starting`/`canStart`; when absent (boards overview) the dialog is join-only.
 - KTD-6. **One shared parser module for join URLs.** `parseJoinUrl` lives beside a relocated `buildJoinUrl` in `web/src/sessions/joinUrl.ts`, so the QR writer and both readers (scanner, paste input) can't drift.
 
 ### High-Level Technical Design
 
-Scanner state machine (camera states are the only scanner-owned logic; the visible branch is keyed on `phase`, and only the live camera is gated on the dialog being open, so closing tears the stream down without flashing the fallback):
+Launcher state machine. The dialog opens on `menu` (the chooser); the camera (lazy chunk + getUserMedia) starts only on "Scan a QR code". Any camera/decoder failure drops back to `menu`, where the paste field always lives.
 
 ```mermaid
 stateDiagram-v2
-    [*] --> loading : dialog opens (lazy chunk + getUserMedia)
+    [*] --> menu : dialog opens (chooser: scan / paste / start)
+    menu --> done : valid URL pasted
+    menu --> loading : tap "Scan a QR code"
     loading --> scanning : stream acquired
-    loading --> fallback : denied / no camera / chunk or WASM load failed
+    loading --> menu : denied / no camera / chunk or WASM load failed
     scanning --> scanning : decoded non-session QR — transient hint
     scanning --> done : decoded /session/join/:token
-    scanning --> fallback : camera error mid-scan, or "Enter the link instead"
-    fallback --> done : valid URL pasted
-    fallback --> loading : retry ("Try camera")
+    scanning --> menu : camera error mid-scan, or "Back"
     scanning --> paused : PWA backgrounded
     paused --> loading : foregrounded — re-acquire stream
     done --> [*] : close dialog, navigate to /session/join/$token
-    scanning --> [*] : user closes — tear down stream
+    menu --> [*] : close dialog
 ```
 
-Flow across components: entry button (`StartBar` "Session" / `MyBoards` "Scan to join") → `ScanToJoin` dialog (lazy scanner + optional host action) → `parseJoinUrl` → `navigate({ to: '/session/join/$token' })` → existing `JoinSession` route (sign-in → consent → RPC → catalog). The host action, when present, calls the caller's `onStart` (createSession) and closes the dialog.
+Flow across components: entry button (`StartBar` `+` / `MyBoards` "Join a session") → `ScanToJoin` dialog chooser → scan (lazy scanner) or paste → `parseJoinUrl` → `navigate({ to: '/session/join/$token' })` → existing `JoinSession` route (sign-in → consent → RPC → catalog). The optional host action calls the caller's `onStart` (createSession) and closes the dialog.
 
 ---
 
@@ -134,23 +134,24 @@ Flow across components: entry button (`StartBar` "Session" / `MyBoards` "Scan to
 - **Test scenarios:** Test expectation: none — build config; proven by U3's integration and the bundle checks below.
 - **Verification:** `npm run build` succeeds; `dist/` shows the scanner lib + WASM in a separate chunk not referenced by the entry bundle; the generated SW precache manifest does not list the `.wasm`; `npm ls zxing-wasm` shows a single deduped copy; no jsDelivr reference for the reader WASM in built output; entry-bundle size unchanged (± a trigger button).
 
-### U3. `ScanToJoin` scanner-first dialog
+### U3. `ScanToJoin` chooser dialog
 
-- **Goal:** The launcher surface: a `Dialog` that opens on the camera + all camera states + paste fallback + an optional demoted host action, ending in a navigate (join) or `onStart` (host).
+- **Goal:** The launcher surface: a `Dialog` that opens on a chooser (scan / paste / optional start), starts the camera only on demand, and ends in a navigate (join) or `onStart` (host).
 - **Requirements:** R3, R4, R5, R6, R9; KTD-4, KTD-5, KTD-7.
 - **Dependencies:** U1, U2.
-- **Files:** `web/src/sessions/ScanToJoin.tsx` (new — exports the `ScanToJoin` dialog plus a `ScanToJoinButton` trigger for the camera-only boards-overview use), `web/src/sessions/ScanToJoin.test.tsx` (new).
-- **Approach:** `Dialog` primitive, centered. Body branches on `phase` (`scanning` | `fallback`), not on `open`, so the close animation never flashes the fallback card. A manual `import()`-in-state loader (keyed per `attempt`, **not** `React.lazy` — a rejected import is memoized and can't recover) awaits `import('./qrDecoder')` then `ensureDecoder()`, showing a spinner meanwhile; the loaded `Scanner` renders with `constraints={{ facingMode: 'environment' }}` and the framing finder. On decode: `parseJoinUrl` — token → close dialog, `navigate({ to: '/session/join/$token', params: { token } })`; no token → transient hint (R5), keep scanning. Invalid pasted value → same inline hint, no navigation (R6). Camera error / "Enter the link instead" / lazy-chunk or WASM load failure → the fallback phase: explanation, paste input feeding the same parser, "Try camera" retry (bumps `attempt`). Only the `Scanner` mount is gated on `open`, so closing tears the stream down; on `visibilitychange` hidden pause, on visible re-acquire (iOS PWA freeze quirk). Reset state on close so the next open is scanner-first. When `onStart` is passed (catalog), render an "or" divider + "Start your own session" button below the viewfinder (disabled unless `canStart`; spinner while `starting`); absent (boards overview) the dialog is camera-only.
+- **Files:** `web/src/sessions/ScanToJoin.tsx` (new — exports the `ScanToJoin` dialog plus a `ScanToJoinButton` trigger for the join-only boards-overview use), `web/src/sessions/ScanToJoin.test.tsx` (new).
+- **Approach:** `Dialog` primitive, centered. Body branches on `phase` (`menu` | `scanning`). The `menu` phase is the chooser: a "Scan a QR code" button (→ `scanning`), an always-visible paste-link field + Join, and — when `onStart` is passed — an "or" divider + "Start your own session" (disabled unless `canStart`; spinner while `starting`). The `scanning` phase mounts a manual `import()`-in-state loader (keyed per `attempt`, **not** `React.lazy` — a rejected import is memoized and can't recover) that awaits `import('./qrDecoder')` then `ensureDecoder()` with a spinner meanwhile; the loaded `Scanner` renders with `constraints={{ facingMode: 'environment' }}` and the framing finder, plus a "Back" to the chooser. On decode: `parseJoinUrl` — token → close dialog, `navigate({ to: '/session/join/$token', params: { token } })`; no token → transient "Not a session code" hint (R5), keep scanning. Paste (menu) uses the same parser: token → navigate; else the same hint (R6). Camera error / offline decoder load failure → back to `menu` with a "Camera unavailable" note (paste always available). Only the `Scanner` mounts in `scanning` (gated on `open`), so closing or leaving `scanning` tears the stream down; on `visibilitychange` hidden pause, on visible re-acquire while scanning (iOS PWA freeze quirk). Reset to `menu` on close.
 - **Test scenarios (mock `@/components/ui/dialog` to keep content mounted through close, mock `./qrDecoder` with a fake `Scanner` exposing `onScan`; router mocked per `JoinSession.test.tsx`):**
-  - Happy: fake scanner emits a valid join URL → navigate called with the token, dialog closes, **and the fallback card does not flash** while closing.
-  - Happy: valid URL pasted in fallback input → same navigate.
-  - Edge: fake scanner emits a non-session QR → hint visible, no navigate, scanner still mounted.
-  - Edge: invalid text pasted in fallback input → inline hint, no navigate.
-  - Error: `qrDecoder` import rejects (simulate offline WASM/chunk failure) → fallback state with paste input, no crash.
-  - Error: scanner reports camera error → fallback state.
-  - Error: import rejects once, then succeeds on retry → scanner recovers (proves the per-attempt loader; a memoized rejection would fail this).
+  - Chooser: on open the "Scan a QR code" button and paste field are present and the camera has NOT started.
+  - Happy: tap Scan → fake scanner emits a valid join URL → navigate with the token, dialog closes.
+  - Happy: valid URL pasted in the chooser → same navigate (no scanning needed).
+  - Edge: scanning a non-session QR → hint visible, no navigate, scanner still mounted.
+  - Edge: invalid pasted value → inline hint, no navigate.
+  - Error: `qrDecoder` import rejects (offline) after tapping Scan → back on the chooser with the camera-unavailable note and the paste field.
+  - Error: scanner reports a camera error → back on the chooser.
+  - Error: first scan attempt fails, second succeeds → scanner recovers (proves the per-attempt loader; a memoized rejection would fail this).
   - Host action: absent when `onStart` is not passed; present and invokes `onStart` when passed; disabled when `canStart` is false.
-- **Verification:** component tests green; manual smoke on a real iPhone (Safari + installed PWA): scan a live session QR from another phone → consent screen; deny camera → paste path works; background/foreground mid-scan → viewfinder recovers.
+- **Verification:** component tests green; manual smoke on a real iPhone (Safari + installed PWA): tap Scan → scan a live session QR → consent screen; deny camera → chooser's paste path works; background/foreground mid-scan → viewfinder recovers.
 
 ### U4. Entry points: StartBar launcher and boards overview
 
@@ -158,9 +159,9 @@ Flow across components: entry button (`StartBar` "Session" / `MyBoards` "Scan to
 - **Requirements:** R1, R2, KTD-7.
 - **Dependencies:** U3.
 - **Files:** `web/src/catalog/SessionBar.tsx`, `web/src/catalog/SessionBar.test.tsx`, `web/src/shell/MyBoards.tsx`, `web/src/shell/MyBoards.test.tsx`.
-- **Approach:** `StartBar`: a single "Session" button opens `<ScanToJoin>` with `onStart` (the existing `createSession` flow, which closes the dialog and opens Share), `starting`, and `canStart={signedIn}` — so joining works signed-out and hosting is gated. The old separate scan icon + "Start session" button are replaced. `MyBoards`: a "Scan to join a session" button (`ScanToJoinButton`, camera-only) near the top; the component imports `useSessions` (from `web/src/sessions/sessionsStore.ts`) to hide it while a session is active — signed-out users still see it (R2).
+- **Approach:** `StartBar`: a single `+` outline icon button (aria-label/title "Start or join a session") opens `<ScanToJoin>` with `onStart` (the existing `createSession` flow, which closes the dialog and opens Share), `starting`, and `canStart={signedIn}` — so joining works signed-out and hosting is gated. The old separate scan icon + "Start session" button are replaced. `MyBoards`: a "Join a session" button (`ScanToJoinButton`, join-only) near the top; the component imports `useSessions` (from `web/src/sessions/sessionsStore.ts`) to hide it while a session is active — signed-out users still see it (R2).
 - **Test scenarios:**
-  - StartBar: "Session" opens the launcher (scanner surface visible); "Start your own session" inside it triggers `createSession` and opens Share; that host action is disabled when signed out; the "Session" button is absent when a session is active (`ActiveBar` swap).
+  - StartBar: the `+` button opens the launcher (chooser visible); "Start your own session" inside it triggers `createSession` and opens Share; that host action is disabled when signed out; the `+` button is absent when a session is active (`ActiveBar` swap).
   - MyBoards: affordance visible with no active session (signed in and signed out); hidden while a session is active.
 - **Verification:** both test files green; manual check that the boards overview affordance doesn't disturb the zero-boards empty state.
 

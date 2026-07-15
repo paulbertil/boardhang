@@ -26,6 +26,13 @@ vi.mock('../sessions/sessionsStore', () => ({
 vi.mock('../sessions/memberAscentsStore', () => ({ refreshMemberAscents: () => h.refreshMemberAscents() }))
 vi.mock('../auth/AuthProvider', () => ({ useAuth: () => ({ status: h.authStatus }) }))
 vi.mock('../sessions/ShareSession', () => ({ ShareSession: () => <div>share-surface</div> }))
+vi.mock('../sessions/ScanToJoin', () => ({
+  ScanToJoinButton: (p: { children: React.ReactNode; 'aria-label'?: string; disabled?: boolean }) => (
+    <button aria-label={p['aria-label']} disabled={p.disabled}>
+      {p.children}
+    </button>
+  ),
+}))
 
 import { SessionBar } from './SessionBar'
 
@@ -54,6 +61,20 @@ describe('SessionBar', () => {
     h.authStatus = 'signedOut'
     render(<SessionBar board={board} />)
     expect(screen.getByRole('button', { name: 'Start session' })).toBeDisabled()
+  })
+
+  it('offers Scan to join in the StartBar, enabled even when signed out', () => {
+    h.authStatus = 'signedOut'
+    render(<SessionBar board={board} />)
+    const scan = screen.getByRole('button', { name: 'Scan to join a session' })
+    expect(scan).toBeInTheDocument()
+    expect(scan).toBeEnabled()
+  })
+
+  it('drops the Scan to join affordance once a session for this board is active', () => {
+    h.sessions = { activeSession: { id: 'S1', name: 'Crew', boardLayoutId: 7 }, roster: [], selfId: null }
+    render(<SessionBar board={board} />)
+    expect(screen.queryByRole('button', { name: 'Scan to join a session' })).not.toBeInTheDocument()
   })
 
   it('renders nothing when a session is active for a different board', () => {

@@ -4,7 +4,7 @@
 // DIFFERENT board is active it renders nothing (the global pill surfaces that one).
 
 import { useCallback, useRef, useState } from 'react'
-import { MoreHorizontal, RefreshCw, Share2, Users, X } from 'lucide-react'
+import { MoreHorizontal, RefreshCw, ScanQrCode, Share2, Users, X } from 'lucide-react'
 import type { CatalogBoardDef } from '../board/boards'
 import { boardShortLabel } from '../lists/listsTypes'
 import { useAuth } from '../auth/AuthProvider'
@@ -21,6 +21,7 @@ import { refreshMemberAscents } from '../sessions/memberAscentsStore'
 import { defaultSessionName, MAX_SESSION_NAME, memberInitials, memberLabel } from '../sessions/sessionsTypes'
 import { MemberAvatar } from '../sessions/MemberAvatar'
 import { ShareSession } from '../sessions/ShareSession'
+import { ScanToJoinButton } from '../sessions/ScanToJoin'
 import { AvatarGroup, AvatarGroupCount } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -89,6 +90,15 @@ function StartBar({
       </span>
       <div className="flex items-center gap-2">
         {error && <span className="truncate text-xs text-destructive">{error}</span>}
+        {/* Join by scanning a friend's QR — enabled signed-out too (the join route owns sign-in). */}
+        <ScanToJoinButton
+          variant="outline"
+          size="icon"
+          className="size-8"
+          aria-label="Scan to join a session"
+        >
+          <ScanQrCode className="size-4" />
+        </ScanToJoinButton>
         <Button
           size="sm"
           disabled={!signedIn || starting}

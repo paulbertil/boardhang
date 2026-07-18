@@ -136,6 +136,8 @@ function ActiveBar({ board, onShare }: { board: CatalogBoardDef; onShare: () => 
   if (!activeSession) return null
   const shown = roster.slice(0, 6)
   const extra = roster.length - shown.length
+  // Solo session: no one else to leave behind, so collapse to a single "End session".
+  const alone = roster.length <= 1
 
   return (
     <div className="flex items-center gap-2 border-b border-border bg-muted/60 px-3 py-2 text-sm">
@@ -205,20 +207,22 @@ function ActiveBar({ board, onShare }: { board: CatalogBoardDef; onShare: () => 
                   void endSession()
                 }}
               >
-                End session for everyone
+                {alone ? 'End session' : 'End session for everyone'}
               </Button>
             )}
-            <Button
-              variant="ghost"
-              size="sm"
-              className="w-full justify-start text-destructive hover:text-destructive"
-              onClick={() => {
-                setMenuOpen(false)
-                void leaveSession()
-              }}
-            >
-              Leave session
-            </Button>
+            {!(isOwner && alone) && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="w-full justify-start text-destructive hover:text-destructive"
+                onClick={() => {
+                  setMenuOpen(false)
+                  void leaveSession()
+                }}
+              >
+                Leave session
+              </Button>
+            )}
           </PopoverContent>
         </Popover>
       </div>

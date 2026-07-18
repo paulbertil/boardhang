@@ -15,6 +15,7 @@ import { MemberAvatar } from '../sessions/MemberAvatar'
 import { useSessions } from '../sessions/sessionsStore'
 import { useSwipeToQueue } from './useSwipeToQueue'
 import { AvatarGroup, AvatarGroupCount } from '@/components/ui/avatar'
+import { useIsTouchDevice } from '@/lib/useIsTouchDevice'
 import { cn } from '@/lib/utils'
 
 /** Max sender avatars in the pill before the +K overflow count (P4). */
@@ -65,10 +66,13 @@ export function CatalogRow({
 
   // Swipe-left-to-queue (U7): active only while an active session targets THIS board. Reads the
   // sessions store directly (the useMemberSenders no-prop-drill idiom), so the gesture stays inert
-  // and adds no behavior when the crew isn't in a session on this board.
+  // and adds no behavior when the crew isn't in a session on this board. Touch-only: on a desktop
+  // the gesture can never run (the hook binds touch listeners), so gate it on a coarse pointer.
   const { activeSession } = useSessions()
-  const swipeEnabled = !!activeSession && activeSession.boardLayoutId === board.layoutId
-  const rowRef = useRef<HTMLButtonElement>(null)
+  const isTouch = useIsTouchDevice()
+  const swipeEnabled =
+    isTouch && !!activeSession && activeSession.boardLayoutId === board.layoutId
+  const rowRef = useRef<HTMLDivElement>(null)
   const swipe = useSwipeToQueue(rowRef, {
     sourceCatalogId: problem.source_catalog_id,
     boardLayoutId: board.layoutId,
@@ -76,22 +80,14 @@ export function CatalogRow({
   })
 
   return (
-    <div className="relative overflow-hidden">
-      {/* Queue action revealed behind the row as it slides left (decorative; the swipe itself and
-          the sonner confirmation convey the action). */}
-      {swipeEnabled && (
-        <div
-          aria-hidden
-          className="absolute inset-y-0 right-0 flex items-center gap-1.5 bg-primary px-4 text-sm font-semibold text-primary-foreground"
-        >
-          <Plus className="size-4" />
-          Queue
-        </div>
-      )}
-      <button
-        ref={rowRef}
-        type="button"
-        onClick={() => onSelect?.(problem)}
+    // Swipe reveal is a side-by-side flex track (row + action), not an action layered behind the
+    // row: sliding the track left brings the action into the space the row vacates. So the row
+    // needs no opaque background — it's transparent and matches whatever surface it sits on (page
+    // or drawer) for free, and there's nothing behind it to seam through at the edge. The divider
+    // lives on this stationary wrapper so it doesn't slide with the row.
+    <div ref={rowRef} className="relative overflow-hidden border-b border-border/50">
+      <div
+        className="flex"
         style={
           swipeEnabled
             ? {
@@ -100,7 +96,11 @@ export function CatalogRow({
               }
             : undefined
         }
-        className="relative flex w-full items-center gap-3 border-b border-border/50 bg-background px-3 py-2.5 text-left transition-colors hover:bg-accent/50 active:bg-accent"
+      >
+      <button
+        type="button"
+        onClick={() => onSelect?.(problem)}
+        className="flex w-full shrink-0 items-center gap-3 px-3 py-2.5 text-left transition-colors hover:bg-accent/50 active:bg-accent"
       >
       {showThumbnail && (
         <div className="w-[72px] shrink-0">
@@ -158,6 +158,18 @@ export function CatalogRow({
         {problem.grade}
       </span>
       </button>
+      {/* The queue action sits to the RIGHT of the row in the track, off-screen until the swipe
+          slides the track left into it (decorative; the swipe + sonner confirmation convey it). */}
+      {swipeEnabled && (
+        <div
+          aria-hidden
+          className="flex shrink-0 items-center gap-1.5 bg-primary px-4 text-sm font-semibold text-primary-foreground"
+        >
+          <Plus className="size-4" />
+          Queue
+        </div>
+      )}
+      </div>
     </div>
   )
 }

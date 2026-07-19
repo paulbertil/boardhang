@@ -9,17 +9,20 @@
 // The sends pill (a green check + sender avatars, keyed on source_catalog_id — KTD6) mirrors
 // CatalogRow so the queue reads identically to the catalog/recents list.
 
-import { BadgeCheck, CheckCircle2, GripVertical, X } from 'lucide-react'
+import { useRef } from 'react'
+import { BadgeCheck, CheckCircle2, GripVertical, Trash2, X } from 'lucide-react'
 import type { CatalogBoardDef } from '../board/boards'
 import { CatalogBoard } from '../board/CatalogBoard'
 import type { CatalogProblem } from '../catalog/catalogSync'
 import { ProblemMeta } from '../catalog/ProblemMeta'
+import { useSwipeAction } from '../catalog/useSwipeAction'
 import type { SenderChip } from '../catalog/useMemberSenders'
 import type { QueueItem } from './queueTypes'
 import { MemberAvatar } from './MemberAvatar'
 import { AvatarGroup, AvatarGroupCount } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import { SortableItem, SortableItemHandle } from '@/components/ui/sortable'
+import { useIsTouchDevice } from '@/lib/useIsTouchDevice'
 import { cn } from '@/lib/utils'
 
 /** Max sender avatars in the pill before the +K overflow count (mirrors CatalogRow). */
@@ -47,7 +50,9 @@ export interface QueueItemRowProps {
   showThumbnail?: boolean
   /** Close the drawer + open this problem via the shared ?problem navigation (KTD9). */
   onOpen: () => void
-  onRemove?: () => void
+  /** Remove this item. May return the write promise so the swipe gesture's busy guard can hold
+   *  for the whole round-trip (prevents a second swipe double-removing). */
+  onRemove?: () => void | Promise<void>
 }
 
 export function QueueItemRow({
@@ -63,6 +68,14 @@ export function QueueItemRow({
 }: QueueItemRowProps) {
   const name = problem?.name ?? 'this climb'
   const isDone = variant === 'done'
+
+  // Swipe a row left to remove it — touch-only, and only in the default (non-edit) view; Edit mode
+  // already exposes an explicit remove control. The reveal rides in a side-by-side track (below),
+  // driven by `swipe.offset`. Hooks stay above the Edit-mode early return so their order is stable.
+  const rowRef = useRef<HTMLLIElement>(null)
+  const isTouch = useIsTouchDevice()
+  const swipeEnabled = isTouch && !editing && !!onRemove
+  const swipe = useSwipeAction(rowRef, { enabled: swipeEnabled, onTrigger: () => onRemove?.() })
 
   const sendsPill =
     senders && senders.length > 0 ? (
@@ -152,33 +165,64 @@ export function QueueItemRow({
     )
   }
 
-  // Default: a recents-style preview row (mirrors CatalogRow), tap to open the problem.
+  // Default: a recents-style preview row (mirrors CatalogRow), tap to open the problem. On touch it
+  // rides in a side-by-side track — swipe left to reveal + fire Remove (the row is transparent, so
+  // nothing sits behind it; see the CatalogRow swipe idiom).
   return (
-    <li className={cn('border-b border-border/50', isDone && 'opacity-70')}>
-      <button
-        type="button"
-        onClick={onOpen}
-        className="flex w-full items-center gap-3 rounded-md px-1 py-2 text-left transition-colors hover:bg-accent/50 active:bg-accent"
+    <li
+      ref={rowRef}
+      // Opt the row out of the Base UI Drawer's touch handling: its swipe listener calls
+      // stopPropagation() on touchmove and would otherwise starve our horizontal swipe gesture
+      // (the same interception that broke the reorder drag). Native vertical scroll still works.
+      {...(swipeEnabled ? { 'data-base-ui-swipe-ignore': '' } : {})}
+      className={cn('relative overflow-hidden border-b border-border/50', isDone && 'opacity-70')}
+    >
+      <div
+        className="flex"
+        style={
+          swipeEnabled
+            ? {
+                transform: `translateX(${swipe.offset}px)`,
+                transition: swipe.offset === 0 ? 'transform 0.2s ease-out' : 'none',
+              }
+            : undefined
+        }
       >
-        {showThumbnail && problem && (
-          <div className="w-[72px] shrink-0">
-            <CatalogBoard board={board} holds={problem.holds} />
+        <button
+          type="button"
+          onClick={onOpen}
+          className="flex w-full shrink-0 items-center gap-3 rounded-md px-1 py-2 text-left transition-colors hover:bg-accent/50 active:bg-accent"
+        >
+          {showThumbnail && problem && (
+            <div className="w-[72px] shrink-0">
+              <CatalogBoard board={board} holds={problem.holds} />
+            </div>
+          )}
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-1.5">
+              <span className={cn('truncate text-sm font-semibold uppercase tracking-tight', isDone && 'line-through')}>
+                {name}
+              </span>
+              {problem?.is_benchmark && (
+                <BadgeCheck role="img" aria-label="Benchmark" className="size-4 shrink-0 text-benchmark" />
+              )}
+            </div>
+            {problem && <ProblemMeta problem={problem} />}
+            {sendsPill}
+          </div>
+          {gradePill}
+        </button>
+        {/* Remove action, revealed to the right as the row slides left (fires on a full swipe). */}
+        {swipeEnabled && (
+          <div
+            aria-hidden
+            className="flex shrink-0 items-center gap-1.5 bg-destructive px-4 text-sm font-semibold text-white"
+          >
+            <Trash2 className="size-4" />
+            Remove
           </div>
         )}
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-1.5">
-            <span className={cn('truncate text-sm font-semibold uppercase tracking-tight', isDone && 'line-through')}>
-              {name}
-            </span>
-            {problem?.is_benchmark && (
-              <BadgeCheck role="img" aria-label="Benchmark" className="size-4 shrink-0 text-benchmark" />
-            )}
-          </div>
-          {problem && <ProblemMeta problem={problem} />}
-          {sendsPill}
-        </div>
-        {gradePill}
-      </button>
+      </div>
     </li>
   )
 }

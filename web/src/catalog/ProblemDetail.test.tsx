@@ -165,14 +165,21 @@ describe('ProblemDetail', () => {
 
   it('does not render the queue strip when the session queue is empty', () => {
     vi.mocked(useActiveQueueProblems).mockReturnValue([])
-    renderDetail('b')
+    render(<Pager id="b" displayed={list} onPageOverQueue={() => {}} />)
+    expect(screen.queryByRole('region', { name: 'Queue' })).not.toBeInTheDocument()
+  })
+
+  it('does not render the queue strip on a host without the queue hand-off (logbook/list)', () => {
+    // No onPageOverQueue → the strip is catalog-only, so it stays hidden even with a full queue.
+    vi.mocked(useActiveQueueProblems).mockReturnValue([entry('q1', 'Q-One'), entry('q2', 'Q-Two')])
+    render(<Pager id="b" displayed={list} />)
     expect(screen.queryByRole('region', { name: 'Queue' })).not.toBeInTheDocument()
   })
 
   it('renders the queue strip whenever the queue is non-empty, regardless of open origin', () => {
     // Viewing a climb NOT in the queue — the strip still shows (nothing highlighted).
     vi.mocked(useActiveQueueProblems).mockReturnValue([entry('q1', 'Q-One'), entry('q2', 'Q-Two')])
-    render(<Pager id="b" displayed={list} />)
+    render(<Pager id="b" displayed={list} onPageOverQueue={() => {}} />)
     expect(screen.getByRole('region', { name: 'Queue' })).toBeInTheDocument()
     expect(screen.getByText('Q-One')).toBeInTheDocument()
     expect(screen.getByText('Q-Two')).toBeInTheDocument()
@@ -194,11 +201,11 @@ describe('ProblemDetail', () => {
   it('highlights the shown climb in the strip only when it is itself queued', () => {
     // Shown climb IS in the queue → its card is marked current (aria-current="true").
     vi.mocked(useActiveQueueProblems).mockReturnValue([entry('b', 'Middle'), entry('c', 'Last')])
-    const { rerender } = render(<Pager id="b" displayed={list} />)
+    const { rerender } = render(<Pager id="b" displayed={list} onPageOverQueue={() => {}} />)
     expect(screen.getByRole('button', { name: /Middle/ })).toHaveAttribute('aria-current', 'true')
     // Shown climb is NOT in the queue → no card is current.
     vi.mocked(useActiveQueueProblems).mockReturnValue([entry('q1', 'Q-One'), entry('q2', 'Q-Two')])
-    rerender(<Pager id="b" displayed={list} />)
+    rerender(<Pager id="b" displayed={list} onPageOverQueue={() => {}} />)
     expect(
       screen.queryByRole('button', { name: /Q-One|Q-Two/, current: true }),
     ).not.toBeInTheDocument()
@@ -210,14 +217,6 @@ describe('ProblemDetail', () => {
     render(<Pager id="b" displayed={list} onPageOverQueue={onPageOverQueue} />)
     fireEvent.click(screen.getByRole('button', { name: /Q-Two/ }))
     expect(onPageOverQueue).toHaveBeenCalledWith('q2', [problem('q1', 'Q-One'), problem('q2', 'Q-Two')])
-  })
-
-  it('falls back to plain navigation on a card tap when the host has no queue hand-off', () => {
-    vi.mocked(useActiveQueueProblems).mockReturnValue([entry('a', 'First'), entry('c', 'Last')])
-    render(<Pager id="b" displayed={list} />)
-    // No onPageOverQueue → onNavigate opens the climb (the harness swaps the shown problem).
-    fireEvent.click(screen.getByRole('button', { name: /Last/ }))
-    expect(screen.getAllByText('Last').length).toBeGreaterThan(0)
   })
 
   it('surfaces a send error as a toast', async () => {

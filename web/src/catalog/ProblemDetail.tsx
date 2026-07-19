@@ -50,8 +50,9 @@ interface ProblemDetailProps {
   /** Page to another problem (replace-navigates ?problem). */
   onNavigate: (id: string) => void
   /** Tap a queue-strip card: page to `id` AND hand prev/next off to the queue's order (`stack`).
-   *  Only hosts with a swappable pager domain pass this (CatalogScreen); elsewhere a strip tap
-   *  falls back to `onNavigate` (opens the climb without changing the paging list). */
+   *  Only hosts with a swappable pager domain pass this (CatalogScreen) — and it doubles as the
+   *  gate for the queue strip: the strip renders only where this is provided, so the logbook and
+   *  list-detail hosts (which don't wire it) show no queue strip. */
   onPageOverQueue?: (id: string, stack: CatalogProblem[]) => void
 }
 
@@ -344,18 +345,19 @@ export function ProblemDetail({
       </div>
       </div>
 
-      {/* Below the fold — its own snap target, revealed by scrolling/dragging up. Whenever the
-          board's session queue is non-empty, the queue strip leads this page (above beta) so
-          scrolling up surfaces "up next". Tapping a card hands prev/next off to the queue's order
-          (onPageOverQueue) where the host supports it, else just opens the climb. */}
+      {/* Below the fold — its own snap target, revealed by scrolling/dragging up. On the catalog
+          host (the one that wires onPageOverQueue), a non-empty session queue puts the queue strip
+          at the top of this page (above beta) so scrolling up surfaces "up next"; tapping a card
+          hands prev/next off to the queue's order. The logbook/list hosts don't wire the hand-off,
+          so they render no strip. */}
       <div className="snap-start space-y-4 pb-[calc(1.5rem+env(safe-area-inset-bottom))] pt-2">
-        {queueEntries.length > 0 && (
+        {onPageOverQueue && queueEntries.length > 0 && (
           <ProblemDetailQueueStrip
             items={queueEntries}
             currentId={currentId}
             board={board}
             showThumbnail={showThumbnails}
-            onSelect={(id) => (onPageOverQueue ? onPageOverQueue(id, queueStack) : onNavigate(id))}
+            onSelect={(id) => onPageOverQueue(id, queueStack)}
           />
         )}
         <BetaVideos sourceCatalogId={currentId} />

@@ -139,8 +139,11 @@ silent (the rail + count convey them), only failures toast.
 The problem-detail drawer shows a horizontal **queue strip** above the beta section, and it is a
 deliberate two-control model — one we chose over having a single control mean different things by
 context. The strip reads the **live** queue (`sessions/useActiveQueueProblems.ts`, the no-prop-drill
-idiom) so it is independent of the pager domain and appears on *every* detail host (catalog, logbook,
-list) whenever the board's session queue is non-empty — even on a climb that isn't itself queued.
+idiom), so it is independent of the pager domain and shows whenever the board's session queue is
+non-empty — even on a climb that isn't itself queued. It is **catalog-only**: the strip renders only
+on the host that wires the queue paging hand-off (`onPageOverQueue`, from `CatalogScreen`), so the
+logbook and list-detail drawers — which reuse `ProblemDetail` but don't wire it — show no strip. That
+one prop is both the hand-off and the strip's visibility gate; there is no separate flag.
 
 Two navigators, each with one fixed meaning:
 
@@ -148,22 +151,21 @@ Two navigators, each with one fixed meaning:
   (the queue when opened from the queue, else the catalog/recents/list).
 - **the strip** always walks the *queue*. Tapping a card **hands paging off to the queue**:
   `useProblemDrawer.pageOver` swaps the pager domain to the queue's order, so from then on the
-  chevrons follow the queue too. Only hosts with a swappable domain (CatalogScreen) pass
-  `onPageOverQueue`; elsewhere a card tap just opens the climb.
+  chevrons follow the queue too.
 
 This is why there is no `fromQueue`/origin flag on the detail: the strip's visibility keys on the
-live queue, not on how the drawer was opened.
+live queue plus the host's hand-off, not on how the drawer was opened.
 
 ```mermaid
 flowchart TD
-    Open[Open problem detail] --> Q{Board session<br/>queue non-empty?}
-    Q -- no --> NoStrip[No strip · chevrons page the source list]
+    Open[Open problem detail] --> Host{Host wires onPageOverQueue?<br/>(catalog only)}
+    Host -- no logbook/list --> NoStrip1[No strip · chevrons page the source list]
+    Host -- yes --> Q{Board session<br/>queue non-empty?}
+    Q -- no --> NoStrip2[No strip · chevrons page the source list]
     Q -- yes --> Strip[Show queue strip · chevrons still page the source list]
     Strip --> Tap{User action}
     Tap -- prev/next or board-swipe --> Domain[Page the current pager domain]
-    Tap -- tap a strip card --> Host{Host supports<br/>onPageOverQueue?}
-    Host -- yes CatalogScreen --> Handoff[pageOver: swap pager domain → queue<br/>chevrons now follow the queue]
-    Host -- no logbook/list --> NavOnly[Open that climb · domain unchanged]
+    Tap -- tap a strip card --> Handoff[pageOver: swap pager domain → queue<br/>chevrons now follow the queue]
 ```
 
 **Persistence dependency (load-bearing):** `session_queue.session_id` is `ON DELETE CASCADE`,

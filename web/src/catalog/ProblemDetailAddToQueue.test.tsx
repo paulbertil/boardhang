@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { toast } from 'sonner'
 import { ProblemDetailAddToQueue } from './ProblemDetailAddToQueue'
 import { useSessions } from '../sessions/sessionsStore'
-import { addProblem, useSessionQueue } from '../sessions/queueStore'
+import { addProblem, removeItem, useSessionQueue } from '../sessions/queueStore'
 import type { QueueItem } from '../sessions/queueTypes'
 import type { Session } from '../sessions/sessionsTypes'
 
@@ -17,6 +17,7 @@ vi.mock('../sessions/sessionsStore', () => ({ useSessions: vi.fn() }))
 vi.mock('../sessions/queueStore', () => ({
   useSessionQueue: vi.fn(),
   addProblem: vi.fn(),
+  removeItem: vi.fn(),
 }))
 
 const BOARD = 7
@@ -82,6 +83,7 @@ function renderAction(sourceCatalogId = 'a', boardLayoutId = BOARD) {
 beforeEach(() => {
   vi.clearAllMocks()
   vi.mocked(addProblem).mockResolvedValue('ok')
+  vi.mocked(removeItem).mockResolvedValue(undefined)
 })
 
 describe('ProblemDetailAddToQueue', () => {
@@ -95,19 +97,31 @@ describe('ProblemDetailAddToQueue', () => {
     })
     expect(addProblem).toHaveBeenCalledWith('a', BOARD)
 
-    // The store now reports the problem as active → the action reflects "In queue".
+    // The store now reports the problem as active → the action toggles to "Remove from queue".
     setup({ activeItems: [queueItem('a')] })
     rerender(<ProblemDetailAddToQueue sourceCatalogId="a" boardLayoutId={BOARD} />)
-    const queued = screen.getByRole('button', { name: 'In queue' })
-    expect(queued).toBeDisabled()
+    const queued = screen.getByRole('button', { name: 'Remove from queue' })
+    expect(queued).toBeEnabled()
     expect(screen.queryByRole('button', { name: 'Add to queue' })).not.toBeInTheDocument()
+  })
+
+  it('removes the problem from the queue when tapped while already queued (no toast)', async () => {
+    setup({ activeItems: [queueItem('a')] })
+    renderAction('a')
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Remove from queue' }))
+    })
+    expect(removeItem).toHaveBeenCalledWith('q-a')
+    // Silent success: the icon toggles back and the row rail clears, so no toast fires.
+    expect(toast).not.toHaveBeenCalled()
+    expect(toast.error).not.toHaveBeenCalled()
   })
 
   it('is hidden when there is no active session', () => {
     setup({ activeSession: null })
     renderAction('a')
     expect(screen.queryByRole('button', { name: 'Add to queue' })).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'In queue' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Remove from queue' })).not.toBeInTheDocument()
   })
 
   it('is hidden when the active session is on a different board', () => {
@@ -124,14 +138,18 @@ describe('ProblemDetailAddToQueue', () => {
       fireEvent.click(screen.getByRole('button', { name: 'Add to queue' }))
     })
     expect(addProblem).toHaveBeenCalledWith('a', BOARD)
-    expect(toast).toHaveBeenCalledWith('Already in the queue')
+    expect(toast).toHaveBeenCalledWith(
+      'Already in the queue',
+      expect.objectContaining({ position: 'top-center' }),
+    )
     expect(toast.error).not.toHaveBeenCalled()
   })
 
-  it('starts already-queued (disabled) when the problem is already active', () => {
+  it('starts already-queued (as a remove toggle) when the problem is already active', () => {
     setup({ activeItems: [queueItem('a')] })
     renderAction('a')
-    expect(screen.getByRole('button', { name: 'In queue' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Remove from queue' })).toBeEnabled()
     expect(addProblem).not.toHaveBeenCalled()
+    expect(removeItem).not.toHaveBeenCalled()
   })
 })

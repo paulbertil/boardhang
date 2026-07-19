@@ -11,10 +11,10 @@
 
 import { useState } from 'react'
 import { ListVideo } from 'lucide-react'
-import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { useSessions } from '../sessions/sessionsStore'
-import { addProblem, useSessionQueue } from '../sessions/queueStore'
+import { addProblem, removeItem, useSessionQueue } from '../sessions/queueStore'
+import { QUEUE_WRITE_ERROR, queueToast, queueToastError } from '../sessions/queueToast'
 
 interface ProblemDetailAddToQueueProps {
   /** The catalog problem shown in the detail view. */
@@ -48,26 +48,48 @@ interface AddToQueueButtonProps {
 function AddToQueueButton({ sessionId, sourceCatalogId, boardLayoutId }: AddToQueueButtonProps) {
   const { activeItems } = useSessionQueue(sessionId)
   const [busy, setBusy] = useState(false)
-  // Already in the active queue → reflect a done/"In queue" state instead of a live add.
-  const queued = activeItems.some((i) => i.sourceCatalogId === sourceCatalogId)
+  // Already in the active queue → the button toggles to "remove" (tap again to take it out).
+  const queuedItem = activeItems.find((i) => i.sourceCatalogId === sourceCatalogId)
 
   async function onAdd() {
     if (busy) return
     setBusy(true)
     try {
       const result = await addProblem(sourceCatalogId, boardLayoutId)
-      if (result === 'already-active') toast('Already in the queue')
+      if (result === 'already-active') queueToast('Already in the queue')
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Couldn’t add to the queue.')
+      queueToastError(e instanceof Error ? e.message : 'Couldn’t add to the queue.')
     } finally {
       setBusy(false)
     }
   }
 
-  if (queued) {
+  async function onRemove() {
+    if (busy || !queuedItem) return
+    const item = queuedItem
+    setBusy(true)
+    try {
+      // No success toast: the icon toggles back to "add" and the row's queue rail clears, so the
+      // removal is already visible — only a failure needs surfacing.
+      await removeItem(item.id)
+    } catch {
+      queueToastError(QUEUE_WRITE_ERROR)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  if (queuedItem) {
     // Already queued: keep the same list icon (not a checkmark), tinted blue to read as "in queue".
+    // Tapping toggles it back out of the queue.
     return (
-      <Button variant="ghost" size="icon" aria-label="In queue" disabled>
+      <Button
+        variant="ghost"
+        size="icon"
+        aria-label="Remove from queue"
+        disabled={busy}
+        onClick={() => void onRemove()}
+      >
         <ListVideo className="size-5 text-primary" />
       </Button>
     )

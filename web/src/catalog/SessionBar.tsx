@@ -165,7 +165,7 @@ function ActiveBar({
       </AvatarGroup>
 
       <div className="ml-auto flex items-center gap-1">
-        <QueueDrawer board={board} triggerClassName="px-2 py-1 text-xs" onOpenProblem={onOpenProblem} />
+        <QueueDrawer board={board} compact onOpenProblem={onOpenProblem} />
         <Button variant="ghost" size="icon" className="size-8" onClick={() => void refresh()} aria-label="Refresh members">
           <RefreshCw className={cn('size-4', refreshing && 'animate-spin')} />
         </Button>

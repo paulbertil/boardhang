@@ -18,7 +18,6 @@ const checkOff = vi.fn().mockResolvedValue(undefined)
 const unCheck = vi.fn().mockResolvedValue('ok')
 const removeItem = vi.fn().mockResolvedValue(undefined)
 const reorder = vi.fn().mockResolvedValue(undefined)
-const addProblem = vi.fn().mockResolvedValue('ok')
 
 vi.mock('./queueStore', () => ({
   useSessionQueue: () => queueState,
@@ -26,7 +25,6 @@ vi.mock('./queueStore', () => ({
   unCheck: (...a: unknown[]) => unCheck(...a),
   removeItem: (...a: unknown[]) => removeItem(...a),
   reorder: (...a: unknown[]) => reorder(...a),
-  addProblem: (...a: unknown[]) => addProblem(...a),
 }))
 
 vi.mock('./sessionsStore', () => ({
@@ -113,7 +111,6 @@ beforeEach(() => {
   unCheck.mockResolvedValue('ok')
   removeItem.mockResolvedValue(undefined)
   reorder.mockResolvedValue(undefined)
-  addProblem.mockResolvedValue('ok')
 })
 
 describe('QueueDrawer', () => {
@@ -215,11 +212,14 @@ describe('QueueDrawer', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /remove alpha from the queue/i }))
     await waitFor(() =>
-      expect(toastError).toHaveBeenCalledWith(expect.stringMatching(/couldn.t update the queue/i)),
+      expect(toastError).toHaveBeenCalledWith(
+        expect.stringMatching(/couldn.t update the queue/i),
+        expect.objectContaining({ position: 'top-center' }),
+      ),
     )
   })
 
-  it('offers an Undo affordance after a remove', async () => {
+  it('removes an item silently — no toast (the row leaving + count drop convey it)', async () => {
     queueState = {
       status: 'loaded',
       activeItems: [activeItem('a1', 'p1', 1)],
@@ -234,13 +234,9 @@ describe('QueueDrawer', () => {
     fireEvent.click(screen.getByRole('button', { name: /remove alpha from the queue/i }))
     expect(removeItem).toHaveBeenCalledWith('a1')
 
-    await waitFor(() => expect(toastFn).toHaveBeenCalled())
-    const [, opts] = toastFn.mock.calls[0] as [string, { action: { label: string; onClick: () => void } }]
-    expect(opts.action.label).toBe('Undo')
-
-    // Undo re-adds the problem (position resets — v1 accepted).
-    opts.action.onClick()
-    expect(addProblem).toHaveBeenCalledWith('p1', 7)
+    // A successful remove surfaces nothing — no confirmation toast, no Undo.
+    await Promise.resolve()
+    expect(toastFn).not.toHaveBeenCalled()
   })
 
   it('shows the sender indicator on a row a crew member has sent', async () => {

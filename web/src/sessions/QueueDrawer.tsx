@@ -13,11 +13,11 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { ListVideo } from 'lucide-react'
-import { toast } from 'sonner'
 import type { CatalogBoardDef } from '../board/boards'
 import { getCatalogProblemsByIds, type CatalogProblem } from '../catalog/catalogSync'
 import { useMemberSenders } from '../catalog/useMemberSenders'
-import { addProblem, removeItem, reorder, useSessionQueue } from './queueStore'
+import { removeItem, reorder, useSessionQueue } from './queueStore'
+import { QUEUE_WRITE_ERROR, queueToastError } from './queueToast'
 import type { QueueItem } from './queueTypes'
 import { useSessions } from './sessionsStore'
 import { QueueItemRow } from './QueueItemRow'
@@ -28,9 +28,6 @@ import { Drawer, DrawerContent, DrawerHeader, DrawerTitle, DrawerTrigger } from 
 import { Skeleton } from '@/components/ui/skeleton'
 import { Sortable, SortableContent } from '@/components/ui/sortable'
 import { cn } from '@/lib/utils'
-
-/** Shown on any failed queue write — the store has already rolled the optimistic change back. */
-const QUEUE_WRITE_ERROR = "Couldn't update the queue — check your connection"
 
 export interface QueueDrawerProps {
   board: CatalogBoardDef
@@ -44,9 +41,15 @@ export interface QueueDrawerProps {
   onOpenProblem: (sourceCatalogId: string, stack: CatalogProblem[]) => void
   /** Styles the entry-point trigger to match the host chrome (catalog bar vs. pill panel). */
   triggerClassName?: string
+  /**
+   * Render the trigger as an icon-only button (the ListVideo glyph + a corner count badge) so it
+   * sits as a peer of the session bar's other ghost icon buttons. Off (default) keeps the labeled
+   * "Queue" chip used in the pill panel's action list.
+   */
+  compact?: boolean
 }
 
-export function QueueDrawer({ board, onOpenProblem, triggerClassName }: QueueDrawerProps) {
+export function QueueDrawer({ board, onOpenProblem, triggerClassName, compact }: QueueDrawerProps) {
   const { activeSession } = useSessions()
   const sessionForBoard =
     activeSession && activeSession.boardLayoutId === board.layoutId ? activeSession : null
@@ -103,31 +106,20 @@ export function QueueDrawer({ board, onOpenProblem, triggerClassName }: QueueDra
     onOpenProblem(item.sourceCatalogId, queueStack)
   }
 
-  const handleRemove = (item: QueueItem) => {
-    const name = nameOf(item.sourceCatalogId)
-    void removeItem(item.id)
-      .then(() => {
-        // Undo re-adds via addProblem — the soft-delete has no restore-in-place API, so the item
-        // returns at the END of the order (position resets); acceptable for v1.
-        toast(`Removed ${name}`, {
-          action: {
-            label: 'Undo',
-            onClick: () =>
-              void addProblem(item.sourceCatalogId, item.boardLayoutId).catch(() =>
-                toast.error(QUEUE_WRITE_ERROR),
-              ),
-          },
-        })
-      })
-      .catch(() => toast.error(QUEUE_WRITE_ERROR))
-  }
+  const handleRemove = (item: QueueItem): Promise<void> =>
+    // No success toast: the row leaves the list and the count drops, so the removal is already
+    // visible — only a failed write (rolled back by the store) needs surfacing. Returned (not
+    // fire-and-forget) so a swipe-to-remove holds the row's busy guard for the whole round-trip.
+    removeItem(item.id).catch(() => {
+      queueToastError(QUEUE_WRITE_ERROR)
+    })
 
   // Reorder submit: optimistic RPC in the store, rollback-to-server-order on failure surfaced as
   // the same error toast as every other write.
   const submitReorder = (nextIds: string[], name: string, position: number) => {
     void reorder(nextIds)
       .then(() => setLiveMessage(`${name} moved to position ${position}`))
-      .catch(() => toast.error(QUEUE_WRITE_ERROR))
+      .catch(() => queueToastError(QUEUE_WRITE_ERROR))
   }
 
   // The dnd-kit Sortable hands back the fully reordered active list on drop. Persist the new id
@@ -166,19 +158,41 @@ export function QueueDrawer({ board, onOpenProblem, triggerClassName }: QueueDra
       }}
       showSwipeHandle
     >
-      <DrawerTrigger
-        aria-label={count > 0 ? `Queue, ${count} active` : 'Queue'}
-        className={cn(
-          'flex items-center gap-1.5 rounded-md border border-border bg-primary/10 px-2.5 py-1.5 text-sm font-medium text-foreground transition hover:bg-primary/15',
-          triggerClassName,
-        )}
-      >
-        <ListVideo className="size-4 shrink-0 text-primary" />
-        <span>Queue</span>
-        {count > 0 && (
-          <Badge className="ml-0.5 min-w-5 justify-center px-1.5 tabular-nums">{count}</Badge>
-        )}
-      </DrawerTrigger>
+      {compact ? (
+        // Session-bar chrome: an icon-only button matching the neighbouring ghost icon buttons,
+        // with the active count as a small neutral corner badge (not the loud blue chip).
+        <DrawerTrigger
+          aria-label={count > 0 ? `Queue, ${count} active` : 'Queue'}
+          className={cn(
+            'relative inline-flex size-8 shrink-0 items-center justify-center rounded-md text-foreground transition-colors',
+            // Highlighted blue only when the queue has something; otherwise a plain white icon
+            // button matching its ghost neighbours.
+            count > 0 ? 'bg-primary/10 hover:bg-primary/15' : 'hover:bg-accent hover:text-accent-foreground',
+            triggerClassName,
+          )}
+        >
+          <ListVideo className={cn('size-4 shrink-0', count > 0 && 'text-primary')} />
+          {count > 0 && (
+            <Badge className="absolute -top-1 -right-1 h-4 min-w-4 justify-center rounded-full px-1 text-[0.625rem] leading-none tabular-nums">
+              {count}
+            </Badge>
+          )}
+        </DrawerTrigger>
+      ) : (
+        <DrawerTrigger
+          aria-label={count > 0 ? `Queue, ${count} active` : 'Queue'}
+          className={cn(
+            'flex items-center gap-1.5 rounded-md border border-border bg-primary/10 px-2.5 py-1.5 text-sm font-medium text-foreground transition hover:bg-primary/15',
+            triggerClassName,
+          )}
+        >
+          <ListVideo className="size-4 shrink-0 text-primary" />
+          <span>Queue</span>
+          {count > 0 && (
+            <Badge className="ml-0.5 min-w-5 justify-center px-1.5 tabular-nums">{count}</Badge>
+          )}
+        </DrawerTrigger>
+      )}
       <DrawerContent>
         <DrawerHeader className="flex flex-row items-center justify-between">
           <DrawerTitle>Queue</DrawerTitle>

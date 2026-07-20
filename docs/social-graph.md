@@ -1,18 +1,21 @@
-# Social graph — follow feed, profiles, blocking (web)
+# Social graph — profiles, follow graph, blocking (web)
 
-The **friends** subsystem: an asymmetric follow graph and a read-only activity feed of friends'
-sends. It is **additive** to the membership-based sharing of collaboration sessions and
-collaborative lists — following is a persistent relationship independent of any list or session.
-Web-first; the Supabase backend is platform-agnostic for a later iOS client.
+The **friends** subsystem: an asymmetric follow graph and profile pages where you view another
+user's sends — their **grade breakdown**, **latest climbing session**, and full send history. It
+is **additive** to the membership-based sharing of collaboration sessions and collaborative lists
+— following is a persistent relationship independent of any list or session. Web-first; the
+Supabase backend is platform-agnostic for a later iOS client.
 
 Plan of record: `docs/plans/2026-07-20-001-feat-web-friends-feed-plan.md` (R1–R24, KTD1–KTD12).
+A follow **feed** was scoped and built, then removed before launch in favour of profile-centric
+viewing; the backend feed RPC is retained but unused (see the RPC catalog note).
 
 ## Shape at a glance
 
 - **Follow** is asymmetric (`follows`, statuses `pending`/`active`). Following a **public** account
   is instant; following an **effectively-private** one creates a request the target approves.
-- The **feed** is a pull (fan-out-on-read) of the caller's actively-followed accounts' sends,
-  keyset-ordered by a server-stamped arrival time. Read-only in v1 (no reactions).
+- **Sends are viewed on a profile** (`/u/:handle`), not in a feed: a per-grade histogram, the
+  most-recent day's session, and a keyset-paged send list. Read-only in v1 (no reactions).
 - **Blocking** is a bidirectional cut threaded through *every* social read.
 - **Privacy** is per-account, with an explicit public/private choice made by every user.
 
@@ -25,12 +28,12 @@ Plan of record: `docs/plans/2026-07-20-001-feat-web-friends-feed-plan.md` (R1–
 | `notifications(user_id, type, actor_id, read_at, …)` | Fire-and-forget activity (`follow`, `follow_accepted`). No client INSERT (RPCs only); SELECT/UPDATE/DELETE own. Requests are **not** here (see below). |
 | `profiles.is_private` | Account privacy flag (default `false`). |
 | `profiles.privacy_choice_at` | When the user made the explicit public/private choice; `null` = never chose. |
-| `ascents.first_sent_at` | **Server-stamped** arrival time — the feed's sort key. |
+| `ascents.first_sent_at` | **Server-stamped** arrival time — the sends sort key. |
 
 All FKs are `ON DELETE CASCADE` on **both** sides, so the existing `public.delete_user()` (0001)
 sweeps a deleted user's edges/blocks/notifications with no RPC change.
 
-### `first_sent_at` — the feed's sort key (KTD3)
+### `first_sent_at` — the sends sort key (KTD3)
 
 A `BEFORE INSERT OR UPDATE` trigger (`set_first_sent_at`) stamps `first_sent_at` the first time a
 row is seen `sent = true` and **never moves it thereafter**, via a single server-authoritative
@@ -41,11 +44,11 @@ new.first_sent_at := coalesce(old.first_sent_at, case when new.sent then now() e
 ```
 
 The client value is ignored on **every** branch (an unsent row with a spoofed future stamp cannot
-survive the sent-flip — that would pin a fake send atop every feed). Ordering by arrival (not by
+survive the sent-flip — that would pin a fake send atop the list). Ordering by arrival (not by
 climb `date`, not by `updated_at`) gives: fresh on late sync, no edit-spam, no clock-gaming, no
-backfill-invisibility. The feed **displays** the climb `date` but **sorts** by `first_sent_at`.
+backfill-invisibility. Profile sends **display** the climb `date` but **sort** by `first_sent_at`.
 Backfill of pre-existing sends runs *before* the trigger is created (or it would re-stamp `now()`).
-A partial index `ascents (user_id, first_sent_at desc, id desc) where sent and not deleted` serves the feed keyset — leading with `user_id` so the planner does per-actor index scans merged in arrival order (rather than scanning the global stream and heap-filtering non-followees).
+A partial index `ascents (user_id, first_sent_at desc, id desc) where sent and not deleted` serves the `get_user_sends` keyset — leading with `user_id` so a single actor's sends page as a per-actor index scan.
 
 ## Access control (migration `0018_social_rpcs.sql`)
 
@@ -53,8 +56,8 @@ Cross-user reads of owner-only `ascents` (0002) **never relax `ascents` RLS** �
 minimal-projection SECURITY DEFINER core, exactly like 0004's list group-status RPC.
 
 - **The projection core `_sends_for_actors` is granted to NO client role** (`revoke all from
-  public`, no grant). It carries no gate; only the two SECURITY-DEFINER wrappers
-  (`get_follow_feed`, `get_user_sends`, same owner) may call it. "Internal" is a naming
+  public`, no grant). It carries no gate; only the SECURITY-DEFINER wrappers
+  (`get_user_sends`, and the retained-but-unused `get_follow_feed`, same owner) may call it. "Internal" is a naming
   convention — the revoke is the access control (KTD4). A direct client call is denied.
 - **`is_blocked(a,b)` (bidirectional) is applied in every social read**: `request_follow`,
   `get_profile_card`, `get_follow_feed`, `get_user_sends`, `get_follow_list`,
@@ -78,8 +81,8 @@ minimal-projection SECURITY DEFINER core, exactly like 0004's list group-status 
 | `get_follow_list(target, kind, limit)` / `get_follow_counts(target)` | Follower/following lists + counts, block- + effective-private-gated (`can_view_social_graph`). |
 | `get_follow_requests(limit)` | Pending requests toward the caller (requester cards) — sourced from `follows`, not notifications. |
 | `_sends_for_actors(ids, limit, cursor…)` | **Revoked** projection core: minimal columns, keyset. |
-| `get_follow_feed(limit, cursor…)` | The caller's active, non-blocked followees → core. |
-| `get_user_sends(target, limit, cursor…)` | Single actor after the R6/R12 gate → core. |
+| `get_follow_feed(limit, cursor…)` | The caller's active, non-blocked followees → core. **Retained but unused** — the web feed surface was removed; kept so a feed can return without a migration. |
+| `get_user_sends(target, limit, cursor…)` | Single actor after the R6/R12 gate → core. Powers the profile page (`ProfileSends`). |
 | `get_notifications(limit)` / `mark_notifications_read(ids)` | Block-aware activity read / mark read. |
 
 **Requests are sourced from `follows` (status='pending'), never duplicated into `notifications`**
@@ -95,13 +98,11 @@ read data). Module-level state + `useSyncExternalStore`, cleared on identity cha
 - **`followStore`** — per-target edge map; optimistic `follow`/`unfollow`/`respondToFollow`/
   `block`/`unblock` over the RPCs, rolling back on error so the caller toasts loudly (KTD10).
   `seedEdge` primes status from `search_profiles` rows.
-- **`feedStore`** — keyset pagination over `get_follow_feed`, with a **user-keyed read-through
-  cache** of the last first page so re-opening (esp. offline) paints instantly. States: `loading`
-  / `loaded` / `stale` (offline, painting cache + "last updated" banner) / `offline` / `error`.
-- **`feedGrouping.groupFeed`** — collapses a **same-arrival burst** (consecutive same-actor run
-  within `BURST_WINDOW_MS` = 5 min, length ≥ `BURST_MIN` = 3) into one expandable "Ana logged N
-  sends" entry, so a bulk logbook import can't bury the feed. **Client-side presentation only** —
-  the server keyset still pages raw rows (R17 holds).
+- **`ProfileSends`** (+ pure `profileStats.ts`) — one keyset fetch over `get_user_sends` (via the
+  shared `sendsPage.ts`) feeds three profile sections: the **grade histogram** (`gradeHistogram` —
+  per-grade counts, hardest-first; no try-bucket split since the projection carries no attempt
+  count), the **latest session** (`latestSession` — the most-recent local-day cluster), and the
+  keyset-paged **all-sends** list. "Load more" grows all three.
 - **`notificationsStore`** — requests (from `get_follow_requests`) + activity (`get_notifications`);
   `badgeCount` = pending requests + unread activity (a request has no `read_at` and is the most
   actionable item, so it counts even with zero unread activity).
@@ -110,20 +111,17 @@ read data). Module-level state + `useSyncExternalStore`, cleared on identity cha
 
 | Route | Component |
 | --- | --- |
-| `/feed` | `FeedScreen` — the follow feed (burst-collapsed, read-cached). |
 | `/people` | `DiscoverScreen` — search + co-members + follow-back. |
 | `/notifications` | `NotificationsScreen` — requests (approve/decline) + activity. |
-| `/u/$handle` | `ProfileScreen` — card + relationship button + block; block-gated "unavailable" state. |
+| `/u/$handle` | `ProfileScreen` — card + relationship button + block + `ProfileSends` (histogram, latest session, list); block-gated "unavailable" state. |
 
 `RelationshipButton` is the visible follow state machine (Follow / Requested→cancel /
 Following→confirm-then-unfollow). `PersonRow` (avatar + identity link + button) is shared across
-discovery and notifications. Feed/profile sends open a problem via the board catalog `?problem`
-drawer.
+discovery and notifications.
 
-**Entry point:** the social surfaces live in the **account menu** (`AccountMenu`) — Feed, Find
-people, Notifications, View profile — with an **unread badge on the header avatar** driven by
-`notificationsStore.badgeCount`. (The bottom nav is at capacity; a dedicated Feed tab is possible
-future nav polish.)
+**Entry point:** the social surfaces live in the **account menu** (`AccountMenu`) — Find people,
+Notifications, View profile — with an **unread badge on the header avatar** driven by
+`notificationsStore.badgeCount`.
 
 ## Privacy cohorts (U7)
 

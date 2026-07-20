@@ -6,7 +6,7 @@ import {
   DrawerHeader,
   DrawerTitle,
 } from '../components/ui/drawer'
-import { Bell, Camera, Rss, UserRound, Users } from 'lucide-react'
+import { Bell, Camera, UserRound, Users } from 'lucide-react'
 import { badgeCount, loadNotifications, useNotifications } from '../social/notificationsStore'
 import { Avatar, AvatarBadge, AvatarFallback, AvatarImage } from '../components/ui/avatar'
 import { Button } from '../components/ui/button'
@@ -317,19 +317,8 @@ export function AccountMenu() {
                 </div>
               )}
 
-              {/* Social surfaces — the follow feed, discovery, notifications, and your own
-                  profile. Each closes the drawer, then navigates. */}
-              <Button
-                variant="outline"
-                className="w-full justify-start"
-                role="menuitem"
-                onClick={() => {
-                  closeMenu()
-                  void navigate({ to: '/feed' })
-                }}
-              >
-                <Rss className="size-4" /> Feed
-              </Button>
+              {/* Social surfaces — discovery, notifications, and your own profile. Each closes
+                  the drawer, then navigates. */}
               <Button
                 variant="outline"
                 className="w-full justify-start"

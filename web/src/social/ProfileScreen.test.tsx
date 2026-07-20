@@ -24,7 +24,7 @@ vi.mock('./followStore', () => ({
   block: vi.fn(),
   unblock: vi.fn(),
 }))
-vi.mock('./UserSendsList', () => ({ UserSendsList: () => <div>sends</div> }))
+vi.mock('./ProfileSends', () => ({ ProfileSends: () => <div>sends</div> }))
 vi.mock('./RelationshipButton', () => ({ RelationshipButton: () => <button>Follow</button> }))
 
 const { ProfileScreen } = await import('./ProfileScreen')

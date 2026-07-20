@@ -13,7 +13,6 @@
 import { useSyncExternalStore } from 'react'
 import { supabase } from '../supabase/client'
 import { currentUserId } from './currentUser'
-import { purgeActorFromFeed } from './feedStore'
 import type { EdgeStatus } from './socialTypes'
 
 export interface EdgeState {
@@ -128,9 +127,6 @@ export async function block(targetId: string): Promise<void> {
     setEdge(targetId, prev)
     throw new Error(error.message)
   }
-  // Hard cut (R12): drop the blocked user's sends from the live feed + the offline cache so a
-  // reopen (especially offline) can't repaint them before the next server fetch.
-  purgeActorFromFeed(targetId)
 }
 
 /** Unblock `targetId`. */

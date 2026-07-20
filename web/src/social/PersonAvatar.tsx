@@ -1,6 +1,6 @@
 // The social avatar — a person's photo with an initials fallback. Extracted because the same
 // Avatar + AvatarImage + AvatarFallback(memberInitials) block was copy-pasted across PersonRow,
-// ProfileScreen, FeedItem, the feed BurstRow, and the notifications rows.
+// ProfileScreen, and the notifications rows.
 
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { cn } from '@/lib/utils'

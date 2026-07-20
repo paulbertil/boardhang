@@ -1,12 +1,12 @@
-// Shared keyset pagination for the two sends-projection RPCs — the follow feed
-// (get_follow_feed) and a user's profile sends (get_user_sends). Both page identically on
-// (first_sent_at, id); only the RPC name and any extra params (e.g. p_target) differ, so the
-// page size + fetch/map lived duplicated in feedStore and UserSendsList before this.
+// Keyset pagination for the sends projection — a user's profile sends (get_user_sends), the
+// single-actor wrapper over the revoked _sends_for_actors core. Pages on (first_sent_at, id).
+// Kept as a small module (rather than inlined into ProfileSends) so the RPC name + params stay
+// in one place and the fetch/map is unit-testable in isolation.
 
 import { supabase } from '../supabase/client'
 import { sendFromRow, type SendItem, type SendRow } from './socialTypes'
 
-/** Page size for the feed + profile-sends keyset pagination. */
+/** Page size for the profile-sends keyset pagination. */
 export const SENDS_PAGE = 30
 
 /**

@@ -13,9 +13,8 @@
 //   /lists/$listId           → ListDetailScreen
 //   /settings                → SettingsScreen (global; appearance/theme)
 //   /board/$layoutId/catalog → CatalogScreen  (search params: see catalogSearch.ts)
-//   /u/$handle               → ProfileScreen  (a user's follow-feed profile)
+//   /u/$handle               → ProfileScreen  (sends, grade breakdown, latest session)
 //   /people                  → DiscoverScreen (search + co-members + follow-back)
-//   /feed                    → FeedScreen     (follow feed of friends' sends)
 //   /notifications           → NotificationsScreen (requests + activity)
 //
 // The tree is built by a factory so tests can spin up an isolated memory-history
@@ -42,7 +41,6 @@ import { CatalogScreen } from './catalog/CatalogScreen'
 import { JoinSession } from './sessions/JoinSession'
 import { ProfileScreen } from './social/ProfileScreen'
 import { DiscoverScreen } from './social/DiscoverScreen'
-import { FeedScreen } from './social/FeedScreen'
 import { NotificationsScreen } from './social/NotificationsScreen'
 import { boardByLayoutId } from './board/boards'
 import { getActiveBoardId, getAddedBoardIds } from './board/boardStore'
@@ -163,13 +161,6 @@ function buildRouteTree() {
     component: DiscoverScreen,
   })
 
-  // The follow feed (U5).
-  const feedRoute = createRoute({
-    getParentRoute: () => rootRoute,
-    path: '/feed',
-    component: FeedScreen,
-  })
-
   // Notifications inbox: requests + activity (U6).
   const notificationsRoute = createRoute({
     getParentRoute: () => rootRoute,
@@ -189,7 +180,6 @@ function buildRouteTree() {
     joinSessionRoute,
     profileRoute,
     peopleRoute,
-    feedRoute,
     notificationsRoute,
   ])
 }

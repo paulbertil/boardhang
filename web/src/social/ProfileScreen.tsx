@@ -31,7 +31,7 @@ import {
 import { Skeleton } from '@/components/ui/skeleton'
 import { PersonAvatar } from './PersonAvatar'
 import { RelationshipButton } from './RelationshipButton'
-import { UserSendsList } from './UserSendsList'
+import { ProfileSends } from './ProfileSends'
 import { block, loadEdge, unblock, useEdge } from './followStore'
 import { cardFromRow, type ProfileCard, type ProfileCardRow } from './socialTypes'
 
@@ -112,7 +112,7 @@ export function ProfileScreen() {
   return (
     <div className="mx-auto flex w-full max-w-lg flex-col gap-4 p-4">
       <ProfileHeader card={card} counts={counts} isSelf={isSelf} />
-      <UserSendsList userId={card.id} />
+      <ProfileSends userId={card.id} />
     </div>
   )
 }

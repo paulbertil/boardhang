@@ -13,7 +13,6 @@ import { isConfigured, supabase } from '../supabase/client'
 import { syncListsIdentity } from '../lists/listsStore'
 import { syncSessionsIdentity } from '../sessions/sessionsStore'
 import { syncFollowsIdentity } from '../social/followStore'
-import { syncFeedIdentity } from '../social/feedStore'
 import { syncNotificationsIdentity } from '../social/notificationsStore'
 import { normalizeHandle } from './handle'
 import { profileFromRow, type AuthStatus, type Profile, type ProfileRow } from './types'
@@ -136,12 +135,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // pointer + per-member chip selections): drop them when the identity changes so a
       // shared device never inherits the previous user's session. Sync + localStorage-only.
       syncSessionsIdentity(session?.user.id ?? null)
-      // Same cross-account safety for the three social stores (network-only, KTD10). All use the
+      // Same cross-account safety for the social stores (network-only, KTD10). Both use the
       // uniform syncXIdentity(userId) contract with an internal last-user guard, so calling them
       // unconditionally is a no-op on a token refresh / same-user restore and resets only on a
       // real identity change (sign-out OR a direct A→B switch with no intervening null session).
       syncFollowsIdentity(session?.user.id ?? null)
-      syncFeedIdentity(session?.user.id ?? null)
       syncNotificationsIdentity(session?.user.id ?? null)
       if (!session) {
         applyProfile(null)

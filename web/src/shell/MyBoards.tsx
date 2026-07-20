@@ -61,6 +61,9 @@ export function MyBoards({ onActivated }: MyBoardsProps) {
   const setResumableList = (next: Session[]) => {
     resumableRef.current = next
     setResumable(next)
+    // A repopulated list supersedes a stale "ended" notice — otherwise a later refetch that
+    // re-empties the list could resurface the notice for a session the user never tapped.
+    if (next.length > 0) setEndedNotice(false)
   }
 
   useEffect(() => {

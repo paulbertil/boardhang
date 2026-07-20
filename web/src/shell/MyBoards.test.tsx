@@ -224,6 +224,24 @@ describe('MyBoards', () => {
     expect(screen.queryByText('That session has ended.')).not.toBeInTheDocument()
   })
 
+  it('does not resurrect the ended notice after a repopulate-then-empty refetch cycle (R3/R5)', async () => {
+    h.liveSessions = [{ id: 'S9', name: 'Tuesday crew', boardLayoutId: 7 }]
+    h.resumeResult = { live: false }
+    render(<MyBoards onActivated={() => {}} />)
+    fireEvent.click(await screen.findByText('Tuesday crew'))
+    expect(await screen.findByText('That session has ended.')).toBeInTheDocument()
+    // A refetch surfaces a new session → the stale notice is cleared, not just masked.
+    h.liveSessions = [{ id: 'S10', name: 'Wednesday crew', boardLayoutId: 7 }]
+    window.dispatchEvent(new Event('online'))
+    expect(await screen.findByText('Wednesday crew')).toBeInTheDocument()
+    // That session then ends elsewhere and the list empties again: the notice must NOT reappear —
+    // the user never re-triggered it (guards against the phantom-notice edge).
+    h.liveSessions = []
+    window.dispatchEvent(new Event('online'))
+    await waitFor(() => expect(screen.queryByText('Wednesday crew')).not.toBeInTheDocument())
+    expect(screen.queryByText('That session has ended.')).not.toBeInTheDocument()
+  })
+
   it('refetches resumable sessions on foreground and reconnect (R5 self-heal)', async () => {
     render(<MyBoards onActivated={() => {}} />)
     await waitFor(() => expect(h.listMyLiveSessions).toHaveBeenCalledTimes(1))

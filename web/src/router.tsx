@@ -13,6 +13,7 @@
 //   /lists/$listId           → ListDetailScreen
 //   /settings                → SettingsScreen (global; appearance/theme)
 //   /board/$layoutId/catalog → CatalogScreen  (search params: see catalogSearch.ts)
+//   /u/$handle               → ProfileScreen  (a user's follow-feed profile)
 //
 // The tree is built by a factory so tests can spin up an isolated memory-history
 // router without reusing route objects already bound to the browser router.
@@ -36,6 +37,7 @@ import { ListsScreen } from './lists/ListsScreen'
 import { ListDetailScreen } from './lists/ListDetailScreen'
 import { CatalogScreen } from './catalog/CatalogScreen'
 import { JoinSession } from './sessions/JoinSession'
+import { ProfileScreen } from './social/ProfileScreen'
 import { boardByLayoutId } from './board/boards'
 import { getActiveBoardId, getAddedBoardIds } from './board/boardStore'
 import { catalogNavTarget } from './catalog/catalogNav'
@@ -141,6 +143,13 @@ function buildRouteTree() {
     component: JoinSession,
   })
 
+  // A user's public profile: /u/:handle (the follow-feed profile page).
+  const profileRoute = createRoute({
+    getParentRoute: () => rootRoute,
+    path: '/u/$handle',
+    component: ProfileScreen,
+  })
+
   return rootRoute.addChildren([
     indexRoute,
     boardsRoute,
@@ -151,6 +160,7 @@ function buildRouteTree() {
     listDetailRoute,
     catalogRoute,
     joinSessionRoute,
+    profileRoute,
   ])
 }
 

@@ -22,9 +22,12 @@ interface AscentRowProps {
   ascent: Ascent
   /** Cached catalog entry for setter/benchmark/thumbnail; absent → graceful fallback. */
   catalog?: CatalogProblem
-  board: CatalogBoardDef
+  /** Board for the thumbnail; only needed when `showThumbnail`. */
+  board?: CatalogBoardDef
   showThumbnail?: boolean
-  onEdit: (ascent: Ascent) => void
+  /** Edit this ascent (the pencil). Omitted on read-only surfaces (e.g. another user's
+   *  profile) — the pencil then isn't rendered. */
+  onEdit?: (ascent: Ascent) => void
   /** Open this ascent's problem detail. Omitted when the problem can't be resolved
    *  (user-created or uncached) — the content area then renders as a non-interactive div. */
   onSelect?: () => void
@@ -55,7 +58,7 @@ export function AscentRow({
   // button when the row opens detail, else a plain div (see onSelect doc above).
   const content: ReactNode = (
     <>
-      {showThumbnail && holds && (
+      {showThumbnail && holds && board && (
         <div className="w-[64px] shrink-0">
           <CatalogBoard board={board} holds={holds} />
         </div>
@@ -124,15 +127,17 @@ export function AscentRow({
         <div className="flex min-w-0 flex-1 items-center gap-3 px-3 py-2.5">{content}</div>
       )}
 
-      <Button
-        variant="ghost"
-        size="icon-sm"
-        aria-label={`Edit log for ${ascent.problemName}`}
-        onClick={() => onEdit(ascent)}
-        className="mr-1 shrink-0"
-      >
-        <Pencil className="size-4" />
-      </Button>
+      {onEdit && (
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          aria-label={`Edit log for ${ascent.problemName}`}
+          onClick={() => onEdit(ascent)}
+          className="mr-1 shrink-0"
+        >
+          <Pencil className="size-4" />
+        </Button>
+      )}
     </div>
   )
 }

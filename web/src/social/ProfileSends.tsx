@@ -4,19 +4,22 @@
 // the gated empty state (indistinguishable from "no sends yet", by design — a private account
 // must not leak whether it has activity).
 //
-// One fetch feeds three sections: the latest climbing session, a grade histogram, and the full
-// keyset-paged list. All three derive from the accumulated sends, so "Load more" grows the
-// histogram too. Read-only.
+// One fetch feeds three sections: the grade pyramid, the latest climbing session, and the full
+// keyset-paged list. All derive from the accumulated sends, so "Load more" grows the pyramid
+// too. Rows are the shared logbook `AscentRow` (read-only — no edit pencil), enriched from the
+// viewer's own synced catalog (setter/benchmark) when the problem resolves, exactly like the
+// logbook.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { boardByLayoutId } from '../board/boards'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
+import { getCatalogProblemsByIds, type CatalogProblem } from '../catalog/catalogSync'
+import { AscentRow } from '../logbook/AscentRow'
+import type { Ascent } from '../logbook/ascents'
 import { GradePyramid } from '../logbook/GradePyramid'
 import type { PyramidInput } from '../logbook/sessions'
-import { relativeTime } from './relativeTime'
 import { fetchSendsPage, SENDS_PAGE } from './sendsPage'
-import { latestSession, type SessionCluster } from './profileStats'
+import { latestSession } from './profileStats'
 import type { SendItem } from './socialTypes'
 
 /** Map profile sends to the pyramid's minimal shape — projection sends are all `sent`. */
@@ -29,6 +32,25 @@ function toPyramidInput(sends: SendItem[]): PyramidInput[] {
     date: s.climbedAt,
     tries: s.tries,
   }))
+}
+
+/** A send → the Ascent shape AscentRow renders. The projection omits vote/stars/comment, so
+ *  those default to "no vote arrow, no stars, no comment"; every projected row is a send. */
+function toAscent(s: SendItem): Ascent {
+  return {
+    id: s.ascentId,
+    date: s.climbedAt,
+    sourceCatalogId: s.sourceCatalogId,
+    userProblemId: s.userProblemId,
+    problemName: s.problemName,
+    problemGrade: s.problemGrade,
+    votedGrade: s.problemGrade,
+    tries: s.tries,
+    stars: 0,
+    comment: '',
+    sent: true,
+    boardLayoutId: s.boardLayoutId,
+  }
 }
 
 type LoadState = 'loading' | 'loaded' | 'error'
@@ -44,6 +66,7 @@ export function ProfileSends({ userId }: { userId: string }) {
   const [status, setStatus] = useState<LoadState>('loading')
   const [done, setDone] = useState(false)
   const [loadingMore, setLoadingMore] = useState(false)
+  const [catalogById, setCatalogById] = useState<Map<string, CatalogProblem>>(new Map())
   // Guards against a stale response overwriting a newer userId's list.
   const reqId = useRef(0)
 
@@ -68,6 +91,20 @@ export function ProfileSends({ userId }: { userId: string }) {
       setDone(rows.length < SENDS_PAGE)
     })
   }, [fetchPage])
+
+  // Enrich rows from the viewer's own cached catalog (setter/benchmark), same as the logbook —
+  // resolves for boards the viewer has synced; the rest fall back gracefully.
+  useEffect(() => {
+    const ids = sends.map((s) => s.sourceCatalogId).filter((v): v is string => v !== null)
+    if (ids.length === 0) return
+    let live = true
+    void getCatalogProblemsByIds(ids).then((map) => {
+      if (live) setCatalogById(map)
+    })
+    return () => {
+      live = false
+    }
+  }, [sends])
 
   async function loadMore() {
     const cursor = sends[sends.length - 1]
@@ -104,66 +141,53 @@ export function ProfileSends({ userId }: { userId: string }) {
 
   return (
     <div className="flex flex-col gap-6">
-      {session && <LatestSessionCard session={session} />}
       <section>
         <h2 className="px-1 pb-2 text-sm font-semibold text-foreground">Grades</h2>
         <GradePyramid items={pyramidInput} />
       </section>
-      <div className="flex flex-col">
-        <p className="px-1 pb-2 text-sm font-medium text-muted-foreground">
-          All sends
-          <span className="text-muted-foreground/70">
-            {' · '}
-            {sends.length}
-            {done ? '' : '+'}
-          </span>
-        </p>
-        <ul className="flex flex-col divide-y divide-border">
-          {sends.map((s) => (
-            <SendRow key={s.ascentId} send={s} />
-          ))}
-        </ul>
+
+      {session && (
+        <section>
+          <div className="flex items-baseline justify-between px-1 pb-2">
+            <h2 className="text-sm font-semibold text-foreground">Latest session</h2>
+            <span className="text-xs text-muted-foreground">
+              {sessionDate.format(session.date)} · {session.sends.length} climb
+              {session.sends.length === 1 ? '' : 's'}
+            </span>
+          </div>
+          <SendRows sends={session.sends} catalogById={catalogById} />
+        </section>
+      )}
+
+      <section className="flex flex-col">
+        <SendRows sends={sends} catalogById={catalogById} />
         {!done && (
           <Button variant="ghost" className="mt-2 self-center" disabled={loadingMore} onClick={() => void loadMore()}>
             {loadingMore ? 'Loading…' : 'Load more'}
           </Button>
         )}
-      </div>
+      </section>
     </div>
   )
 }
 
-function LatestSessionCard({ session }: { session: SessionCluster }) {
-  const count = session.sends.length
+/** Read-only list of sends as shared AscentRows (no edit pencil, not tappable in v1). */
+function SendRows({
+  sends,
+  catalogById,
+}: {
+  sends: SendItem[]
+  catalogById: Map<string, CatalogProblem>
+}) {
   return (
-    <section className="rounded-lg border border-border p-3">
-      <div className="flex items-baseline justify-between pb-2">
-        <h2 className="text-sm font-semibold text-foreground">Latest session</h2>
-        <span className="text-xs text-muted-foreground">
-          {sessionDate.format(session.date)} · {count} climb{count === 1 ? '' : 's'}
-        </span>
-      </div>
-      <ul className="flex flex-col divide-y divide-border">
-        {session.sends.map((s) => (
-          <SendRow key={s.ascentId} send={s} />
-        ))}
-      </ul>
-    </section>
-  )
-}
-
-function SendRow({ send }: { send: SendItem }) {
-  const board = boardByLayoutId(send.boardLayoutId)
-  return (
-    <li className="flex items-center justify-between gap-3 py-3">
-      <div className="min-w-0">
-        <p className="truncate font-medium text-foreground">{send.problemName}</p>
-        <p className="truncate text-sm text-muted-foreground">
-          {send.problemGrade}
-          {board ? ` · ${board.name}` : ''}
-        </p>
-      </div>
-      <span className="shrink-0 text-xs text-muted-foreground">{relativeTime(send.climbedAt)}</span>
-    </li>
+    <div className="flex flex-col overflow-hidden rounded-lg border border-border">
+      {sends.map((s) => (
+        <AscentRow
+          key={s.ascentId}
+          ascent={toAscent(s)}
+          catalog={s.sourceCatalogId ? catalogById.get(s.sourceCatalogId) : undefined}
+        />
+      ))}
+    </div>
   )
 }

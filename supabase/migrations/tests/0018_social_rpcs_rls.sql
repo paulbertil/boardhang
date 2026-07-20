@@ -221,6 +221,30 @@ begin
     raise notice 'PASS: get_profile_card resolves a handle (case-insensitive) for a normal viewer';
 end $$;
 
+-- ── get_follow_counts / get_follow_list gated by can_view_social_graph ────────
+-- As A (follows B active + C active — E is only pending, not counted): own counts + list.
+do $$
+declare _cf bigint; _n int;
+begin
+    select following into _cf from public.get_follow_counts('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa');
+    assert _cf = 2, 'FAIL: A following-count expected 2 (B,C active), got ' || coalesce(_cf::text, 'null');
+    select count(*) into _n from public.get_follow_list('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'following');
+    assert _n = 2, 'FAIL: A following-list expected 2, got ' || _n;
+    raise notice 'PASS: own follower/following counts + list';
+end $$;
+-- Private gate: OUT is not an active follower of private C → no counts, no follower list.
+select set_config('test.uid', :'OUT', false);
+do $$
+declare _n int;
+begin
+    select count(*) into _n from public.get_follow_counts('cccccccc-cccc-cccc-cccc-cccccccccccc');
+    assert _n = 0, 'FAIL: a non-follower got private C''s follow counts';
+    select count(*) into _n from public.get_follow_list('cccccccc-cccc-cccc-cccc-cccccccccccc', 'followers');
+    assert _n = 0, 'FAIL: a non-follower got private C''s follower list';
+    raise notice 'PASS: follow counts + list gated for a private non-follower';
+end $$;
+select set_config('test.uid', :'A', false);
+
 -- ── block: tears down edges both ways, gates every read, purges notifications ──
 -- A blocks B. Their active edge + A's follow-notification-from-B-side and B's notif must go.
 select public.block_user('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb');
@@ -251,14 +275,18 @@ begin
     raise notice 'PASS: block severs edges + gates card/sends/feed/search + blocks re-follow';
 end $$;
 
--- Block is bidirectional: B cannot see A's card either.
+-- Block is bidirectional: B cannot see A's card either, AND the cross-pair notification was
+-- purged from the raw table (not merely filtered on read) — A's 'follow' notif to B is gone.
 select set_config('test.uid', :'B', false);
 do $$
 declare _n int;
 begin
     select count(*) into _n from public.get_profile_card('anna');
     assert _n = 0, 'FAIL: block not bidirectional — B still sees A''s card';
-    raise notice 'PASS: block is bidirectional for the profile card';
+    select count(*) into _n from public.notifications
+        where user_id = 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb';
+    assert _n = 0, 'FAIL: block_user did not purge the cross-pair notification (B still has A''s follow row)';
+    raise notice 'PASS: block is bidirectional + purges cross-pair notifications';
 end $$;
 
 reset role;

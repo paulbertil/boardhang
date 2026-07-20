@@ -35,7 +35,7 @@ function send(ascentId: string, arrivalMs: number): SendItem {
 }
 
 function feed(partial: Partial<FeedState>): FeedState {
-  return { status: 'loaded', sends: [], done: true, fetchedAt: null, ...partial }
+  return { status: 'loaded', sends: [], done: true, loadingMore: false, fetchedAt: null, ...partial }
 }
 
 afterEach(() => {

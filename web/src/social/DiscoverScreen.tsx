@@ -10,8 +10,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { supabase } from '../supabase/client'
 import { useAuth } from '../auth/AuthProvider'
-import { Input } from '../components/ui/input'
-import { Skeleton } from '../components/ui/skeleton'
+import { Input } from '@/components/ui/input'
+import { Skeleton } from '@/components/ui/skeleton'
 import { PersonRow } from './PersonRow'
 import { seedEdge } from './followStore'
 import {

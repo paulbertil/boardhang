@@ -13,14 +13,14 @@ import { MoreHorizontal } from 'lucide-react'
 import { toast } from 'sonner'
 import { supabase } from '../supabase/client'
 import { useAuth } from '../auth/AuthProvider'
-import { Avatar, AvatarFallback, AvatarImage } from '../components/ui/avatar'
-import { Button } from '../components/ui/button'
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
+import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from '../components/ui/dropdown-menu'
+} from '@/components/ui/dropdown-menu'
 import {
   Dialog,
   DialogContent,
@@ -28,8 +28,8 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '../components/ui/dialog'
-import { Skeleton } from '../components/ui/skeleton'
+} from '@/components/ui/dialog'
+import { Skeleton } from '@/components/ui/skeleton'
 import { memberInitials } from '../sessions/sessionsTypes'
 import { RelationshipButton } from './RelationshipButton'
 import { UserSendsList } from './UserSendsList'

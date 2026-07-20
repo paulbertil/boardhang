@@ -6,9 +6,9 @@
 import { useEffect } from 'react'
 import { Link } from '@tanstack/react-router'
 import { toast } from 'sonner'
-import { Avatar, AvatarFallback, AvatarImage } from '../components/ui/avatar'
-import { Button } from '../components/ui/button'
-import { Skeleton } from '../components/ui/skeleton'
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
+import { Button } from '@/components/ui/button'
+import { Skeleton } from '@/components/ui/skeleton'
 import { memberInitials } from '../sessions/sessionsTypes'
 import { relativeTime } from './relativeTime'
 import {

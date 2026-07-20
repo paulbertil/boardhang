@@ -8,10 +8,13 @@
 -- (this catches a missing WITH CHECK, a wrong path index, or a cross-user leak). Final
 -- fidelity still requires applying to real Supabase — see the migration's manual step.
 
--- Roles Supabase provides. NOLOGIN; we reach them via `set role`.
+-- Roles Supabase provides. NOLOGIN; we reach them via `set role`. service_role is Supabase's
+-- trusted, RLS-bypassing admin role — modeled here so a migration that REVOKEs from it (e.g.
+-- 0018 locking down the sends projection core) applies against the same role set as production.
 do $$ begin
   if not exists (select from pg_roles where rolname = 'anon') then create role anon nologin; end if;
   if not exists (select from pg_roles where rolname = 'authenticated') then create role authenticated nologin; end if;
+  if not exists (select from pg_roles where rolname = 'service_role') then create role service_role nologin; end if;
 end $$;
 
 create schema if not exists auth;

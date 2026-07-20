@@ -22,6 +22,8 @@ export interface FeedState {
   sends: SendItem[]
   /** No more pages after the loaded set. */
   done: boolean
+  /** A "load more" page fetch is in flight — guards against a double-tap appending twice. */
+  loadingMore: boolean
   /** When the currently-painted data was fetched (ms) — drives the "last updated" marker. */
   fetchedAt: number | null
 }
@@ -29,7 +31,7 @@ export interface FeedState {
 const PAGE = 30
 const CACHE_KEY = 'feedCacheV1'
 
-const EMPTY: FeedState = { status: 'idle', sends: [], done: false, fetchedAt: null }
+const EMPTY: FeedState = { status: 'idle', sends: [], done: false, loadingMore: false, fetchedAt: null }
 
 let state: FeedState = EMPTY
 const listeners = new Set<() => void>()
@@ -72,6 +74,23 @@ function writeCache(userId: string, sends: SendItem[], fetchedAt: number): void 
   }
 }
 
+/**
+ * Remove an actor's sends from the live feed AND drop the persisted cache — called when the
+ * viewer blocks someone, so blocking is an immediate hard cut (R12) rather than leaving the
+ * blocked user's sends in the in-memory feed or repainting them from the offline cache on the
+ * next open. The cache is rewritten by the next successful online fetch.
+ */
+export function purgeActorFromFeed(actorId: string): void {
+  try {
+    localStorage.removeItem(CACHE_KEY)
+  } catch {
+    // ignore
+  }
+  if (state.sends.some((s) => s.actorId === actorId)) {
+    setState({ sends: state.sends.filter((s) => s.actorId !== actorId) })
+  }
+}
+
 /** Clear the cached feed (sign-out / user switch). Called from AuthProvider identity sync. */
 export function clearFeedCache(): void {
   try {
@@ -109,9 +128,9 @@ export async function loadFeed(): Promise<void> {
   }
   const cached = readCache(userId)
   if (cached) {
-    setState({ status: 'stale', sends: cached.sends, done: cached.sends.length < PAGE, fetchedAt: cached.fetchedAt })
+    setState({ status: 'stale', sends: cached.sends, done: cached.sends.length < PAGE, loadingMore: false, fetchedAt: cached.fetchedAt })
   } else {
-    setState({ status: 'loading', sends: [], done: false, fetchedAt: null })
+    setState({ status: 'loading', sends: [], done: false, loadingMore: false, fetchedAt: null })
   }
 
   const rows = await fetchPage(null)
@@ -127,14 +146,20 @@ export async function loadFeed(): Promise<void> {
   setState({ status: 'loaded', sends: rows, done: rows.length < PAGE, fetchedAt: now })
 }
 
-/** Load the next keyset page. No-op while offline/empty. */
+/** Load the next keyset page. No-op while offline/empty OR while a page is already in flight
+ *  (a double-tap would otherwise read the same cursor twice and append the page twice). */
 export async function loadMoreFeed(): Promise<void> {
-  if (state.done || state.sends.length === 0) return
+  if (state.done || state.loadingMore || state.sends.length === 0) return
   const token = loadToken
   const cursor = state.sends[state.sends.length - 1]
+  setState({ loadingMore: true })
   const rows = await fetchPage(cursor)
-  if (token !== loadToken || rows === null) return
-  setState({ sends: [...state.sends, ...rows], done: rows.length < PAGE, status: 'loaded' })
+  if (token !== loadToken) return // superseded by a fresh loadFeed (which cleared loadingMore)
+  if (rows === null) {
+    setState({ loadingMore: false })
+    return
+  }
+  setState({ sends: [...state.sends, ...rows], done: rows.length < PAGE, status: 'loaded', loadingMore: false })
 }
 
 function navigatorOffline(): boolean {

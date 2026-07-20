@@ -4,7 +4,7 @@
 // isn't openable in the bundled catalog, so it renders as plain text.
 
 import { useNavigate } from '@tanstack/react-router'
-import { Avatar, AvatarFallback, AvatarImage } from '../components/ui/avatar'
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { boardByLayoutId } from '../board/boards'
 import { catalogNavTarget } from '../catalog/catalogNav'
 import { memberInitials } from '../sessions/sessionsTypes'

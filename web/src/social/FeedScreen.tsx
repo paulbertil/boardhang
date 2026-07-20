@@ -8,9 +8,9 @@
 import { useEffect, useState } from 'react'
 import { Link } from '@tanstack/react-router'
 import { ChevronDown } from 'lucide-react'
-import { Avatar, AvatarFallback, AvatarImage } from '../components/ui/avatar'
-import { Button } from '../components/ui/button'
-import { Skeleton } from '../components/ui/skeleton'
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
+import { Button } from '@/components/ui/button'
+import { Skeleton } from '@/components/ui/skeleton'
 import { memberInitials } from '../sessions/sessionsTypes'
 import { FeedItem } from './FeedItem'
 import { groupFeed, type BurstEntry } from './feedGrouping'
@@ -87,8 +87,13 @@ export function FeedScreen() {
         )}
       </ul>
       {!feed.done && (
-        <Button variant="ghost" className="mt-2 self-center" onClick={() => void loadMoreFeed()}>
-          Load more
+        <Button
+          variant="ghost"
+          className="mt-2 self-center"
+          disabled={feed.loadingMore}
+          onClick={() => void loadMoreFeed()}
+        >
+          {feed.loadingMore ? 'Loading…' : 'Load more'}
         </Button>
       )}
     </div>

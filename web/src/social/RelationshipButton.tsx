@@ -10,7 +10,7 @@
 
 import { useState } from 'react'
 import { toast } from 'sonner'
-import { Button } from '../components/ui/button'
+import { Button } from '@/components/ui/button'
 import {
   Dialog,
   DialogContent,
@@ -18,7 +18,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '../components/ui/dialog'
+} from '@/components/ui/dialog'
 import { follow, unfollow, useEdge } from './followStore'
 import type { ProfileCard } from './socialTypes'
 

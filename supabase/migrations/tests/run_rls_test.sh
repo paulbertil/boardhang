@@ -37,6 +37,16 @@ run_case() {
   echo "→ loading Supabase schema stub…"
   "${psql_in[@]}" < "$HERE/stub_supabase.sql"
 
+  # Reproduce Supabase's default privileges: real projects GRANT EXECUTE on new public functions
+  # to anon/authenticated by default, so a function created by a migration is client-callable
+  # unless the migration explicitly REVOKEs from those roles (revoking only from PUBLIC does not
+  # remove an explicit role grant). Without this, a "function is not client-callable" assertion
+  # (e.g. 0018's _sends_for_actors gate) would pass even against an insufficient revoke. Applied
+  # before the migration chain so functions inherit the grant at CREATE time, exactly as in prod.
+  "${psql_in[@]}" <<'SQL'
+alter default privileges in schema public grant execute on functions to anon, authenticated;
+SQL
+
   local mig
   for mig in "${migrations[@]}"; do
     echo "→ applying $(basename "$mig")…"

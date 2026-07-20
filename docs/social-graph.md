@@ -45,7 +45,7 @@ survive the sent-flip — that would pin a fake send atop every feed). Ordering 
 climb `date`, not by `updated_at`) gives: fresh on late sync, no edit-spam, no clock-gaming, no
 backfill-invisibility. The feed **displays** the climb `date` but **sorts** by `first_sent_at`.
 Backfill of pre-existing sends runs *before* the trigger is created (or it would re-stamp `now()`).
-A partial index `ascents (first_sent_at desc, id desc) where sent and not deleted` serves the keyset.
+A partial index `ascents (user_id, first_sent_at desc, id desc) where sent and not deleted` serves the feed keyset — leading with `user_id` so the planner does per-actor index scans merged in arrival order (rather than scanning the global stream and heap-filtering non-followees).
 
 ## Access control (migration `0018_social_rpcs.sql`)
 

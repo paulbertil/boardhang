@@ -2,7 +2,7 @@
 // Shared by search results, co-member suggestions, and the follow-back list (U4).
 
 import { Link } from '@tanstack/react-router'
-import { Avatar, AvatarFallback, AvatarImage } from '../components/ui/avatar'
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { memberInitials } from '../sessions/sessionsTypes'
 import { RelationshipButton } from './RelationshipButton'
 import type { ProfileCard } from './socialTypes'

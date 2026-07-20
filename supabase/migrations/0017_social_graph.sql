@@ -103,11 +103,14 @@ create trigger ascents_set_first_sent_at
     before insert or update on public.ascents
     for each row execute function public.set_first_sent_at();
 
--- Feed hot-path index. The follow feed (0018) orders live sends by (first_sent_at desc,
--- id desc) as a keyset over a set of followed actors. Partial — only live sends carry a
--- non-null first_sent_at — so the index stays small and the ORDER BY is index-only.
-create index if not exists ascents_first_sent_idx
-    on public.ascents (first_sent_at desc, id desc)
+-- Feed hot-path index. The feed core (0018 _sends_for_actors) filters `user_id = any(actors)`
+-- then orders by (first_sent_at desc, id desc). Leading with user_id lets the planner do a
+-- per-actor index scan and merge them in first_sent_at order, stopping at the limit — instead
+-- of scanning the GLOBAL first_sent_at stream and heap-filtering out non-followees (which
+-- degrades with total send volume, not follow count). Also serves get_user_sends (single actor).
+-- Partial: only live sends carry a non-null first_sent_at, so the index stays small.
+create index if not exists ascents_actor_first_sent_idx
+    on public.ascents (user_id, first_sent_at desc, id desc)
     where sent = true and deleted = false;
 
 -- ─────────────────────────────────────────────────────────────────────────────

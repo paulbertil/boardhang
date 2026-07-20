@@ -8,7 +8,7 @@
 
 import { useState } from 'react'
 import { useAuth } from '../auth/AuthProvider'
-import { Button } from '../components/ui/button'
+import { Button } from '@/components/ui/button'
 import {
   Dialog,
   DialogContent,
@@ -16,7 +16,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '../components/ui/dialog'
+} from '@/components/ui/dialog'
 import { PrivacyChoice, type Privacy } from './PrivacyChoice'
 
 export function PrivacyChoiceNotice() {

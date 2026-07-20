@@ -9,8 +9,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { supabase } from '../supabase/client'
 import { boardByLayoutId } from '../board/boards'
-import { Button } from '../components/ui/button'
-import { Skeleton } from '../components/ui/skeleton'
+import { Button } from '@/components/ui/button'
+import { Skeleton } from '@/components/ui/skeleton'
 import { relativeTime } from './relativeTime'
 import { sendFromRow, type SendItem, type SendRow } from './socialTypes'
 

@@ -234,10 +234,16 @@ create or replace function public.search_profiles(p_q text, p_limit int default 
     security definer
     set search_path = ''
 as $$
+declare _prefix text;
 begin
     if length(trim(p_q)) < 2 then
         return;  -- below the minimum: no query, no enumeration
     end if;
+    -- Escape LIKE metacharacters so the query is a literal PREFIX, not a pattern. Without this,
+    -- `__` (underscores, which pass the length floor) becomes the wildcard pattern `__%` and
+    -- matches every profile of length >= 2 — defeating the prefix/anti-scrape intent. Escape the
+    -- escape char first, then the wildcards, and match with an explicit ESCAPE '\'.
+    _prefix := replace(replace(replace(trim(p_q), '\', '\\'), '%', '\%'), '_', '\_') || '%';
     return query
         select p.id, p.handle::text, p.display_name, p.avatar_url, p.is_private, f.status
         from public.profiles p
@@ -245,8 +251,8 @@ begin
                on f.follower_id = auth.uid() and f.followee_id = p.id
         where p.id <> auth.uid()
           and not public.is_blocked(auth.uid(), p.id)
-          and (p.handle::text ilike trim(p_q) || '%'
-               or p.display_name ilike trim(p_q) || '%')
+          and (p.handle::text ilike _prefix escape '\'
+               or p.display_name ilike _prefix escape '\')
         order by p.handle::text
         limit least(greatest(p_limit, 1), 50);
 end;
@@ -417,8 +423,15 @@ as $$
     limit least(greatest(p_limit, 1), 100);
 $$;
 
--- No grant to authenticated/anon — see the KTD4 note above. Belt: revoke from public too.
-revoke all on function public._sends_for_actors(uuid[], int, timestamptz, uuid) from public;
+-- No grant to any client role — see the KTD4 note above. Revoke from public AND from anon /
+-- authenticated / service_role explicitly: Supabase's default privileges grant EXECUTE on new
+-- public functions to those roles directly, and `revoke ... from public` does NOT remove an
+-- explicit role grant — so revoking only public would leave the core client-callable (a full
+-- gate bypass: any client could POST /rest/v1/rpc/_sends_for_actors with an arbitrary actor
+-- array and read anyone's sends). Only the two same-owner SECURITY DEFINER wrappers below may
+-- call it.
+revoke all on function public._sends_for_actors(uuid[], int, timestamptz, uuid)
+    from public, anon, authenticated, service_role;
 
 -- get_follow_feed: the caller's actively-followed, non-blocked actors → the core. (An active
 -- edge already implies the follow was allowed, so no effective-private check here — R9.)

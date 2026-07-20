@@ -67,6 +67,11 @@ begin
   if to_regclass('public.session_queue') is not null then
     execute 'grant select, insert, update, delete on public.session_queue to anon, authenticated';
   end if;
+  -- 0016 chain: the social-graph RLS assertions read/write follows/blocks/notifications as
+  -- `authenticated` (RLS still gates rows; the negative INSERT cases assert denial).
+  if to_regclass('public.follows') is not null then
+    execute 'grant select, insert, update, delete on public.follows, public.blocks, public.notifications to anon, authenticated';
+  end if;
 end $$;
 SQL
 
@@ -141,5 +146,13 @@ run_case "$HERE/0016_session_resume_rls.sql" \
   "$HERE/../0002_logbook_sync.sql" \
   "$HERE/../0007_collaboration_sessions.sql" \
   "$HERE/../0016_session_resume.sql"
+
+# 0016: social graph — follows/blocks/notifications tables + RLS, the is_blocked bidirectional
+# helper, and the ascents.first_sent_at server-stamped trigger. Needs ascents + set_updated_at
+# (0002); the stub provides profiles/auth.users. The trigger cases run as superuser, the RLS
+# cases as `authenticated`.
+run_case "$HERE/0016_social_graph_rls.sql" \
+  "$HERE/../0002_logbook_sync.sql" \
+  "$HERE/../0016_social_graph.sql"
 
 echo "✅ ALL RLS CASES PASSED"

@@ -92,6 +92,18 @@ begin
     raise notice 'PASS: follow private → pending, sends still gated';
 end $$;
 
+-- C sees A's pending request in the request inbox (sourced from follows, not notifications).
+select set_config('test.uid', :'C', false);
+do $$
+declare _n int;
+begin
+    select count(*) into _n from public.get_follow_requests()
+        where id = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
+    assert _n = 1, 'FAIL: C did not see A''s pending request in get_follow_requests';
+    raise notice 'PASS: get_follow_requests surfaces a pending request';
+end $$;
+select set_config('test.uid', :'A', false);
+
 -- C accepts → A becomes active follower → C's send is now visible; A gets follow_accepted.
 select set_config('test.uid', :'C', false);
 select public.respond_to_follow('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', true);

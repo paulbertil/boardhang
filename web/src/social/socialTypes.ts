@@ -85,6 +85,59 @@ export interface SendRow {
   first_sent_at: string
 }
 
+// ─── Notifications (get_notifications activity rows) ──────────────────────────
+
+/** A fire-and-forget activity notification: a new follower, or an accepted request. */
+export type NotificationType = 'follow' | 'follow_accepted'
+
+export interface NotificationItem {
+  id: string
+  type: NotificationType
+  actorId: string
+  handle: string
+  displayName: string
+  avatarUrl: string | null
+  createdAt: string
+  readAt: string | null
+}
+
+export interface NotificationRow {
+  id: string
+  type: NotificationType
+  actor_id: string
+  handle: string
+  display_name: string
+  avatar_url: string | null
+  created_at: string
+  read_at: string | null
+}
+
+export function notificationFromRow(row: NotificationRow): NotificationItem {
+  return {
+    id: row.id,
+    type: row.type,
+    actorId: row.actor_id,
+    handle: row.handle,
+    displayName: row.display_name,
+    avatarUrl: avatarPublicUrl(row.avatar_url),
+    createdAt: row.created_at,
+    readAt: row.read_at,
+  }
+}
+
+/** A pending follow request (from get_follow_requests) is a profile card + when it was made. */
+export interface FollowRequest extends ProfileCard {
+  requestedAt: string
+}
+
+export interface FollowRequestRow extends ProfileCardRow {
+  requested_at: string
+}
+
+export function followRequestFromRow(row: FollowRequestRow): FollowRequest {
+  return { ...cardFromRow(row), requestedAt: row.requested_at }
+}
+
 export function sendFromRow(row: SendRow): SendItem {
   return {
     ascentId: row.ascent_id,

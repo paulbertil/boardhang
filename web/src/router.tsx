@@ -16,6 +16,7 @@
 //   /u/$handle               → ProfileScreen  (a user's follow-feed profile)
 //   /people                  → DiscoverScreen (search + co-members + follow-back)
 //   /feed                    → FeedScreen     (follow feed of friends' sends)
+//   /notifications           → NotificationsScreen (requests + activity)
 //
 // The tree is built by a factory so tests can spin up an isolated memory-history
 // router without reusing route objects already bound to the browser router.
@@ -42,6 +43,7 @@ import { JoinSession } from './sessions/JoinSession'
 import { ProfileScreen } from './social/ProfileScreen'
 import { DiscoverScreen } from './social/DiscoverScreen'
 import { FeedScreen } from './social/FeedScreen'
+import { NotificationsScreen } from './social/NotificationsScreen'
 import { boardByLayoutId } from './board/boards'
 import { getActiveBoardId, getAddedBoardIds } from './board/boardStore'
 import { catalogNavTarget } from './catalog/catalogNav'
@@ -168,6 +170,13 @@ function buildRouteTree() {
     component: FeedScreen,
   })
 
+  // Notifications inbox: requests + activity (U6).
+  const notificationsRoute = createRoute({
+    getParentRoute: () => rootRoute,
+    path: '/notifications',
+    component: NotificationsScreen,
+  })
+
   return rootRoute.addChildren([
     indexRoute,
     boardsRoute,
@@ -181,6 +190,7 @@ function buildRouteTree() {
     profileRoute,
     peopleRoute,
     feedRoute,
+    notificationsRoute,
   ])
 }
 

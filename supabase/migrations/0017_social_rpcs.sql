@@ -357,6 +357,30 @@ $$;
 revoke all on function public.get_follow_list(uuid, text, int) from public;
 grant execute on function public.get_follow_list(uuid, text, int) to authenticated;
 
+-- get_follow_requests: the pending-request inbox (R24) — requesters' cards for edges pending
+-- toward the caller. Sourced from `follows` (status='pending'), NOT from notifications (KTD7):
+-- respond_to_follow mutates the edge, so the request list is the edge itself. Block-filtered.
+create or replace function public.get_follow_requests(p_limit int default 50)
+    returns table (id uuid, handle text, display_name text, avatar_url text,
+                   is_private boolean, requested_at timestamptz)
+    language sql
+    security definer
+    set search_path = ''
+    stable
+as $$
+    select p.id, p.handle::text, p.display_name, p.avatar_url, p.is_private, f.created_at
+    from public.follows f
+    join public.profiles p on p.id = f.follower_id
+    where f.followee_id = auth.uid()
+      and f.status = 'pending'
+      and not public.is_blocked(auth.uid(), p.id)
+    order by f.created_at desc
+    limit least(greatest(p_limit, 1), 100);
+$$;
+
+revoke all on function public.get_follow_requests(int) from public;
+grant execute on function public.get_follow_requests(int) to authenticated;
+
 -- ─────────────────────────────────────────────────────────────────────────────
 -- The sends projection core (KTD4) + its two wrappers.
 --

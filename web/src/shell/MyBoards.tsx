@@ -152,7 +152,7 @@ export function MyBoards({ onActivated }: MyBoardsProps) {
           ))}
         </section>
       )}
-      {!activeSession && endedNotice && (
+      {!activeSession && endedNotice && resumable.length === 0 && (
         <p
           role="status"
           className="rounded-md border border-border bg-muted px-3 py-2 text-sm text-muted-foreground"

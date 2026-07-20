@@ -53,9 +53,12 @@ begin
     select id into own      from public.sessions where name = 'resume-own';
     select id into joined   from public.sessions where name = 'resume-joined';
     select id into otherbrd from public.sessions where name = 'resume-otherbrd';
-    select array_agg(id order by expires_at desc) into ids from public.list_my_live_sessions();
+    -- No ORDER BY in array_agg: it must preserve the function's emitted row order, so this
+    -- assertion genuinely exercises the RPC's own `order by expires_at desc` (a client-side
+    -- re-sort here would make the ordering claim a false positive).
+    select array_agg(id) into ids from public.list_my_live_sessions();
     assert ids = array[own, joined, otherbrd],
-        'FAIL: A expected [own, joined, otherbrd] (desc), got ' || coalesce(ids::text, 'NULL');
+        'FAIL: A expected [own, joined, otherbrd] (expires_at desc), got ' || coalesce(ids::text, 'NULL');
 end $$;
 
 -- (2) OUT is a member of nothing → empty result.

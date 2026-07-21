@@ -135,6 +135,43 @@ function authValue(status: 'signedOut' | 'signedInWithProfile') {
   }
 }
 
+// The sticky-session-bar tests (#98) drive the session store's reactive view directly.
+// The default (no active session) leaves every pre-existing test untouched.
+const sessionsMock = vi.hoisted(() => ({
+  value: {
+    status: 'idle',
+    activeSession: null,
+    roster: [],
+    memberStatus: {},
+    selfId: null,
+    error: null,
+  } as Record<string, unknown>,
+}))
+vi.mock('../sessions/sessionsStore', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../sessions/sessionsStore')>()
+  return { ...actual, useSessions: () => sessionsMock.value }
+})
+
+function activeSessionValue(boardLayoutId = LAYOUT): Record<string, unknown> {
+  return {
+    status: 'active',
+    activeSession: {
+      id: 'S1',
+      ownerId: 'owner-1',
+      name: 'Crew',
+      boardLayoutId,
+      expiresAt: new Date(Date.now() + 3_600_000).toISOString(),
+      createdAt: '2026-07-20T00:00:00Z',
+      updatedAt: '2026-07-20T00:00:00Z',
+      deleted: false,
+    },
+    roster: [],
+    memberStatus: {},
+    selfId: null,
+    error: null,
+  }
+}
+
 // ProblemDetail (opened by tapping a recent) reaches for Web Bluetooth.
 vi.mock('../ble/useBle', () => ({
   useBle: vi.fn(() => ({ state: 'disconnected', deviceName: null, error: null })),
@@ -162,6 +199,15 @@ beforeEach(() => {
   // Reset the saved-list mocks to their inert defaults so a list-filter test can't leak.
   listsMock.saved = { status: 'loaded', lists: [], error: null }
   listsMock.members = { ids: new Set<string>(), ready: true }
+  // Reset the session view to "no session" so a #98 test can't leak the header portal.
+  sessionsMock.value = {
+    status: 'idle',
+    activeSession: null,
+    roster: [],
+    memberStatus: {},
+    selfId: null,
+    error: null,
+  }
 })
 
 describe('CatalogScreen — recents open as their own stack', () => {
@@ -453,5 +499,28 @@ describe('CatalogScreen — hold filter over routing', () => {
     // The detail board (inside the drawer) rings the highlighted position b uses.
     const drawer = screen.getByRole('dialog')
     expect(within(drawer).getAllByTestId('hold-highlight')).toHaveLength(1)
+  })
+})
+
+describe('CatalogScreen — sticky session bar (#98)', () => {
+  it('portals the active-session bar into the sticky header', async () => {
+    addBoard(LAYOUT)
+    sessionsMock.value = activeSessionValue()
+    renderWithRouter(`/board/${LAYOUT}/catalog`)
+    await screen.findByText('Visible')
+
+    // The bar (its renameable session-name button) lives inside the frosted sticky
+    // header, so it stays visible while the list scrolls.
+    const name = await screen.findByRole('button', { name: 'Crew' })
+    expect(name.closest('.app-header')).not.toBeNull()
+  })
+
+  it('keeps the start-session bar in the scroll flow when no session is active', async () => {
+    addBoard(LAYOUT)
+    renderWithRouter(`/board/${LAYOUT}/catalog`)
+    await screen.findByText('Visible')
+
+    const start = screen.getByText('Session with friends')
+    expect(start.closest('.app-header')).toBeNull()
   })
 })

@@ -180,7 +180,10 @@ via a `stripSearchParams` middleware so URLs stay clean; `validateSearch` re-fil
   plus a shadow that lifts once scrolled). It's a three-slot stack: a **top slot** for the
   environment banners (below), the **navbar** (right-aligned `AccountMenu`), and a **bottom slot**
   for the `SessionPill` (shown when a session is active, except on the catalog where `SessionBar`
-  owns it). Empty slots collapse (`.app-header-slot:empty`). The bottom `Navigation` stays a solid
+  owns it), then two portal slots the catalog fills: the **filter-pill slot** (`headerFilterSlot`)
+  and the **session-bar slot** (`headerSessionSlot` — `SessionBar` portals in while a session for
+  the routed board is active, so the crew bar stays visible as the list scrolls, issue #98).
+  Empty slots collapse (`.app-header-slot:empty`). The bottom `Navigation` stays a solid
   grid-row bar.
 - **Angle** comes from `?angle` (never a fresh `getAngle()` in render); `CatalogScreen` mirrors the
   resolved angle back into `boardStore` so `/boards` stays coherent with a deep link.

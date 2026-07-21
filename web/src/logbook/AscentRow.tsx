@@ -82,7 +82,7 @@ export function AscentRow({
               <Star className="size-3" /> {ascent.stars}
             </span>
           )}
-          <span className="shrink-0">{triesLabel(ascent.tries)}</span>
+          <span className="shrink-0">{triesLabel(ascent.tries, ascent.sent)}</span>
           {setter && <span className="truncate">by {setter}</span>}
         </div>
         {ascent.comment && (

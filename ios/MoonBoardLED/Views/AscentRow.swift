@@ -34,7 +34,14 @@ struct AscentRow: View {
         if let method {
             parts.append(Text(method).foregroundColor(.indigo))
         }
-        parts.append(Text(ascent.tries == 1 ? "Flash" : "\(ascent.tries) tries")
+        // A flash requires a send — a single unsent attempt reads "1 try", not "Flash".
+        let triesText: String
+        if ascent.sent && ascent.tries == 1 {
+            triesText = "Flash"
+        } else {
+            triesText = "\(ascent.tries) \(ascent.tries == 1 ? "try" : "tries")"
+        }
+        parts.append(Text(triesText)
             .foregroundColor(.secondary))
         return .dotJoined(parts)
     }

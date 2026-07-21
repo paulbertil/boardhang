@@ -24,6 +24,7 @@ import { LastOpenedBar } from './LastOpenedBar'
 import { dismissLastOpened } from './lastOpenedStore'
 import { useBottomSlot } from '../shell/bottomSlot'
 import { useHeaderFilterSlot } from '../shell/headerFilterSlot'
+import { useHeaderSessionSlot } from '../shell/headerSessionSlot'
 import { ProblemDetail } from './ProblemDetail'
 import { Drawer, DrawerContent, DrawerTitle } from '@/components/ui/drawer'
 import { Button } from '@/components/ui/button'
@@ -290,6 +291,11 @@ export function CatalogScreen() {
   // one seed-writing `setFilters`. `inSession` mirrors the list predicate's session
   // branch; `statusReady` gates status pills exactly like activeFilterCount.
   const headerFilterSlot = useHeaderFilterSlot()
+  // The sticky header's session slot. With a session live for THIS board the SessionBar
+  // portals into it (issue #98) so the crew bar stays visible as the list scrolls; the
+  // start/resume affordances stay an in-flow row (no reason to pin them). Falls back to
+  // in-flow when the slot hasn't mounted.
+  const headerSessionSlot = useHeaderSessionSlot()
 
   return (
     <div className="flex flex-1 flex-col">
@@ -323,8 +329,14 @@ export function CatalogScreen() {
       </div>
       {!added && <UnaddedBoardBanner name={board.name} onAdd={() => addBoard(board.layoutId)} />}
       {/* Opening from the queue pages over the queue's order (the stack SessionBar/QueueDrawer
-          hands up becomes the pager domain). The always-on queue strip is independent of this. */}
-      <SessionBar board={board} onOpenProblem={openDrawer} />
+          hands up becomes the pager domain). The always-on queue strip is independent of this.
+          Active session for this board → portal the bar into the sticky header (issue #98);
+          otherwise it renders in flow right here. */}
+      {sessionForBoard && headerSessionSlot ? (
+        createPortal(<SessionBar board={board} onOpenProblem={openDrawer} />, headerSessionSlot)
+      ) : (
+        <SessionBar board={board} onOpenProblem={openDrawer} />
+      )}
       <CatalogList
         board={board}
         angle={angle}

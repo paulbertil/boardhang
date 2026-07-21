@@ -3,6 +3,10 @@
 // session is active it offers "Start session" and stacks any cross-device Resume rows for
 // this board above it; when a session for a DIFFERENT board is active it renders nothing
 // (the global pill surfaces that one).
+//
+// Placement: rendered by CatalogScreen. While a session for this board is ACTIVE the
+// screen portals the bar into the shell's sticky header slot (headerSessionSlot, issue
+// #98) so it stays visible as the list scrolls; the start/resume states stay in-flow.
 
 import { useCallback, useRef, useState } from 'react'
 import { MoreHorizontal, Plus, Share2, Users, X } from 'lucide-react'

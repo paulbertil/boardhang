@@ -19,6 +19,7 @@ import { useMatchRoute, useNavigate, useSearch } from '@tanstack/react-router'
 import { AccountMenu } from '../auth/AccountMenu'
 import { BottomSlotContext } from './bottomSlot'
 import { HeaderFilterSlotContext } from './headerFilterSlot'
+import { HeaderSessionSlotContext } from './headerSessionSlot'
 import { useBoardStore } from '../board/boardStore'
 import { catalogNavTarget } from '../catalog/catalogNav'
 import { Navigation, type NavView } from './Navigation'
@@ -93,6 +94,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
   // state so consumers re-render once the element commits and can portal into it.
   const [bottomSlot, setBottomSlot] = useState<HTMLDivElement | null>(null)
   const [headerFilterSlot, setHeaderFilterSlot] = useState<HTMLDivElement | null>(null)
+  const [headerSessionSlot, setHeaderSessionSlot] = useState<HTMLDivElement | null>(null)
 
   // The home tab shown on the collapsed catalog nav — the last home screen visited.
   const [origin, setOrigin] = useState<'boards' | 'logbook' | 'settings'>('boards')
@@ -177,6 +179,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
   return (
     <BottomSlotContext.Provider value={bottomSlot}>
       <HeaderFilterSlotContext.Provider value={headerFilterSlot}>
+      <HeaderSessionSlotContext.Provider value={headerSessionSlot}>
       <div className="app-shell">
         <main className="app-scroll overflow-x-hidden" onScroll={onScroll}>
           <header
@@ -210,6 +213,11 @@ export function AppLayout({ children }: { children: ReactNode }) {
                 HeaderFilterSlotContext (mirrors the bottom slot). Empty on every other
                 route ⇒ collapses. */}
             <div ref={setHeaderFilterSlot} className="app-header-slot" />
+            {/* Session-bar slot — the catalog portals its SessionBar here while a session
+                for the routed board is active, so the crew bar rides the sticky header
+                instead of scrolling away with the list (issue #98). Empty otherwise ⇒
+                collapses. */}
+            <div ref={setHeaderSessionSlot} className="app-header-slot" />
           </header>
           {children}
         </main>
@@ -231,6 +239,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
         />
         <Toaster position="bottom-center" />
       </div>
+      </HeaderSessionSlotContext.Provider>
       </HeaderFilterSlotContext.Provider>
     </BottomSlotContext.Provider>
   )

@@ -23,7 +23,9 @@ export const TRY_BUCKET_COLOR: Record<TryBucket, string> = {
   '4+ tries': '#ef4444', // red
 }
 
-/** Compact tries label for a logbook row: "Flash" or "N tries". */
-export function triesLabel(tries: number): string {
-  return tries <= 1 ? 'Flash' : `${tries} tries`
+/** Compact tries label for a logbook row: "Flash" (a one-try *send*), else "N try/tries".
+ *  A flash requires a send — a single unsent attempt reads "1 try", not "Flash". */
+export function triesLabel(tries: number, sent: boolean): string {
+  if (sent && tries <= 1) return 'Flash'
+  return `${tries} ${tries === 1 ? 'try' : 'tries'}`
 }

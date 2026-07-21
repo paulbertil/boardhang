@@ -17,6 +17,8 @@ function send(over: Partial<SendItem>): SendItem {
     climbedAt: '2026-07-10T12:00:00.000Z',
     firstSentAt: '2026-07-10T12:00:00.000Z',
     tries: 1,
+    stars: 0,
+    comment: '',
     ...over,
   }
 }

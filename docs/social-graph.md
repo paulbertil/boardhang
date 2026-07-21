@@ -101,10 +101,12 @@ read data). Module-level state + `useSyncExternalStore`, cleared on identity cha
 - **`ProfileSends`** (+ pure `profileStats.ts`) — one keyset fetch over `get_user_sends` (via the
   shared `sendsPage.ts`) feeds three profile sections: the **grade pyramid** — the logbook's own
   `GradePyramid`/`pyramid()`, try-bucket-split (flash/2nd/3rd/4+), fed by the `tries` the projection
-  now carries — the **latest session** (`latestSession` — the most-recent local-day cluster), and
+  carries — the **latest session** (`latestSession` — the most-recent local-day cluster), and
   the keyset-paged **all-sends** list. "Load more" grows all three. Rows are the shared logbook
-  `AscentRow`, read-only: no edit pencil, and `showSentIndicator={false}` (every row is a send by
-  this user, so an always-on green check would misread as "you sent it"). Rows resolvable in the
+  `AscentRow` (board thumbnail, stars, tries, setter, comment — the projection carries
+  `tries`/`stars`/`comment` so the row matches the logbook), read-only: no edit pencil, and
+  `showSentIndicator={false}` (every row is a send by this user, so an always-on green check would
+  misread as "you sent it"). Rows resolvable in the
   viewer's synced catalog open the same **`?problem` detail drawer** the logbook/catalog use
   (`useProblemDrawer` + `ProblemDetail`); the drawer's green check reflects the *viewer's* own
   sends ("you've also done this").

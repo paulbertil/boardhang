@@ -70,6 +70,9 @@ export interface SendItem {
   firstSentAt: string
   /** Attempt count — drives the profile grade pyramid's try-bucket split (same as the logbook). */
   tries: number
+  /** Quality rating (0–3) and the climber's note — shown in the profile send row, like the logbook. */
+  stars: number
+  comment: string
 }
 
 export interface SendRow {
@@ -86,6 +89,8 @@ export interface SendRow {
   climbed_at: string
   first_sent_at: string
   tries: number
+  stars: number
+  comment: string
 }
 
 // ─── Notifications (get_notifications activity rows) ──────────────────────────
@@ -156,5 +161,7 @@ export function sendFromRow(row: SendRow): SendItem {
     climbedAt: row.climbed_at,
     firstSentAt: row.first_sent_at,
     tries: row.tries,
+    stars: row.stars,
+    comment: row.comment,
   }
 }

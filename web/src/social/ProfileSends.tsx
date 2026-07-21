@@ -44,8 +44,8 @@ function toPyramidInput(sends: SendItem[]): PyramidInput[] {
   }))
 }
 
-/** A send → the Ascent shape AscentRow renders. The projection omits vote/stars/comment, so
- *  those default to "no vote arrow, no stars, no comment"; every projected row is a send. */
+/** A send → the Ascent shape AscentRow renders. The projection omits only voted_grade (→ no vote
+ *  arrow); every projected row is a send. */
 function toAscent(s: SendItem): Ascent {
   return {
     id: s.ascentId,
@@ -56,8 +56,8 @@ function toAscent(s: SendItem): Ascent {
     problemGrade: s.problemGrade,
     votedGrade: s.problemGrade,
     tries: s.tries,
-    stars: 0,
-    comment: '',
+    stars: s.stars,
+    comment: s.comment,
     sent: true,
     boardLayoutId: s.boardLayoutId,
   }

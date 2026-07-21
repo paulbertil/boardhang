@@ -15,8 +15,9 @@ describes the feed as historical context.
 
 - **Follow** is asymmetric (`follows`, statuses `pending`/`active`). Following a **public** account
   is instant; following an **effectively-private** one creates a request the target approves.
-- **Sends are viewed on a profile** (`/u/:handle`), not in a feed: the grade pyramid, the
-  most-recent day's session, and a keyset-paged send list. Read-only in v1 (no reactions).
+- **Sends are viewed on a profile** (`/u/:handle`), not in a feed: the grade pyramid and the
+  keyset-paged sends grouped into day-sessions, rendered exactly like the logbook. Read-only in v1
+  (no reactions).
 - **Blocking** is a bidirectional cut threaded through *every* social read.
 - **Privacy** is per-account, with an explicit public/private choice made by every user.
 
@@ -98,18 +99,17 @@ read data). Module-level state + `useSyncExternalStore`, cleared on identity cha
 - **`followStore`** — per-target edge map; optimistic `follow`/`unfollow`/`respondToFollow`/
   `block`/`unblock` over the RPCs, rolling back on error so the caller toasts loudly (KTD10).
   `seedEdge` primes status from `search_profiles` rows.
-- **`ProfileSends`** (+ pure `profileStats.ts`) — one keyset fetch over `get_user_sends` (via the
-  shared `sendsPage.ts`) feeds three profile sections: the **grade pyramid** — the logbook's own
-  `GradePyramid`/`pyramid()`, try-bucket-split (flash/2nd/3rd/4+), fed by the `tries` the projection
-  carries — the **latest session** (`latestSession` — the most-recent local-day cluster), and
-  the keyset-paged **all-sends** list. "Load more" grows all three. Rows are the shared logbook
+- **`ProfileSends`** — one keyset fetch over `get_user_sends` (via the shared `sendsPage.ts`),
+  mapped to `Ascent` and rendered **exactly like the logbook**: a **grade pyramid** (the logbook's
+  own `GradePyramid`/`pyramid()`, try-bucket-split flash/2nd/3rd/4+) then the sends grouped into
+  **day-sessions** (the same `sessions()` grouping + date headers, e.g. "Tue, Jul 21 — 2
+  problems"). "Load more" appends more keyset pages into the day groups. Rows are the shared
   `AscentRow` (board thumbnail, stars, tries, setter, comment — the projection carries
   `tries`/`stars`/`comment` so the row matches the logbook), read-only: no edit pencil, and
   `showSentIndicator={false}` (every row is a send by this user, so an always-on green check would
-  misread as "you sent it"). Rows resolvable in the
-  viewer's synced catalog open the same **`?problem` detail drawer** the logbook/catalog use
-  (`useProblemDrawer` + `ProblemDetail`); the drawer's green check reflects the *viewer's* own
-  sends ("you've also done this").
+  misread as "you sent it"). Rows resolvable in the viewer's synced catalog open the same
+  **`?problem` detail drawer** the logbook/catalog use (`useProblemDrawer` + `ProblemDetail`); the
+  drawer's green check reflects the *viewer's* own sends ("you've also done this").
 - **`notificationsStore`** — requests (from `get_follow_requests`) + activity (`get_notifications`);
   `badgeCount` = pending requests + unread activity (a request has no `read_at` and is the most
   actionable item, so it counts even with zero unread activity).
@@ -120,7 +120,7 @@ read data). Module-level state + `useSyncExternalStore`, cleared on identity cha
 | --- | --- |
 | `/people` | `DiscoverScreen` — search + co-members + follow-back. |
 | `/notifications` | `NotificationsScreen` — requests (approve/decline) + activity. |
-| `/u/$handle` | `ProfileScreen` — card + relationship button + block + `ProfileSends` (grade pyramid, latest session, tappable list → `?problem` drawer); block-gated "unavailable" state. |
+| `/u/$handle` | `ProfileScreen` — card + relationship button + block + `ProfileSends` (grade pyramid + day-session-grouped sends, tappable → `?problem` drawer); block-gated "unavailable" state. |
 
 `RelationshipButton` is the visible follow state machine (Follow / Requested→cancel /
 Following→confirm-then-unfollow). `PersonRow` (avatar + identity link + button) is shared across

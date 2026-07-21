@@ -4,12 +4,13 @@
 // the gated empty state (indistinguishable from "no sends yet", by design — a private account
 // must not leak whether it has activity).
 //
-// One fetch feeds three sections: the grade pyramid, the latest climbing session, and the full
-// keyset-paged list. Rows are the shared logbook `AscentRow` (read-only — no edit pencil, and no
-// "sent" check since every row is a send by this user), enriched from the viewer's own synced
-// catalog (setter/benchmark). Tapping a resolvable row opens the same `?problem` detail drawer
-// the logbook and catalog use — the pager domain is the loaded sends, and the drawer's green
-// "sent" check reflects the VIEWER's own logbook (i.e. "you've also done this").
+// The list mirrors the logbook exactly: a grade pyramid, then the keyset-paged sends grouped
+// into day-sessions (same `sessions()` grouping + date headers) rendered with the shared
+// `AscentRow`. Read-only — no edit pencil, and no per-row "sent" check since every row is a send
+// by this user. Rows are enriched from the viewer's own synced catalog (setter/benchmark/
+// thumbnail); a resolvable row opens the same `?problem` detail drawer the logbook/catalog use —
+// the pager domain is the loaded sends, and the drawer's green "sent" check reflects the VIEWER's
+// own logbook (i.e. "you've also done this").
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { getRouteApi } from '@tanstack/react-router'
@@ -22,30 +23,17 @@ import { useProblemDrawer } from '../catalog/useProblemDrawer'
 import { AscentRow } from '../logbook/AscentRow'
 import { useEnsureAscentsLoaded, type Ascent } from '../logbook/ascents'
 import { GradePyramid } from '../logbook/GradePyramid'
-import type { PyramidInput } from '../logbook/sessions'
+import { sessions } from '../logbook/sessions'
 import { Button } from '@/components/ui/button'
 import { Drawer, DrawerContent, DrawerTitle } from '@/components/ui/drawer'
 import { Skeleton } from '@/components/ui/skeleton'
 import { fetchSendsPage, SENDS_PAGE } from './sendsPage'
-import { latestSession } from './profileStats'
 import type { SendItem } from './socialTypes'
 
 const routeApi = getRouteApi('/u/$handle')
 
-/** Map profile sends to the pyramid's minimal shape — projection sends are all `sent`. */
-function toPyramidInput(sends: SendItem[]): PyramidInput[] {
-  return sends.map((s) => ({
-    sent: true,
-    sourceCatalogId: s.sourceCatalogId,
-    problemName: s.problemName,
-    problemGrade: s.problemGrade,
-    date: s.climbedAt,
-    tries: s.tries,
-  }))
-}
-
-/** A send → the Ascent shape AscentRow renders. The projection omits only voted_grade (→ no vote
- *  arrow); every projected row is a send. */
+/** A send → the Ascent shape AscentRow / sessions() / pyramid() consume. The projection omits
+ *  only voted_grade (→ no vote arrow); every projected row is a send. */
 function toAscent(s: SendItem): Ascent {
   return {
     id: s.ascentId,
@@ -64,12 +52,6 @@ function toAscent(s: SendItem): Ascent {
 }
 
 type LoadState = 'loading' | 'loaded' | 'error'
-
-const sessionDate = new Intl.DateTimeFormat(undefined, {
-  weekday: 'short',
-  day: 'numeric',
-  month: 'short',
-})
 
 export function ProfileSends({ userId }: { userId: string }) {
   const [sends, setSends] = useState<SendItem[]>([])
@@ -128,8 +110,8 @@ export function ProfileSends({ userId }: { userId: string }) {
     setDone(rows.length < SENDS_PAGE)
   }
 
-  const session = useMemo(() => latestSession(sends), [sends])
-  const pyramidInput = useMemo(() => toPyramidInput(sends), [sends])
+  const ascents = useMemo(() => sends.map(toAscent), [sends])
+  const daySessions = useMemo(() => sessions(ascents), [ascents])
 
   // ── Problem detail drawer (?problem) — same protocol as logbook/catalog ──────
   const search = routeApi.useSearch()
@@ -148,8 +130,8 @@ export function ProfileSends({ userId }: { userId: string }) {
   const sendProblems = useMemo(() => {
     const seen = new Set<string>()
     const out: CatalogProblem[] = []
-    for (const s of sends) {
-      const id = s.sourceCatalogId
+    for (const a of ascents) {
+      const id = a.sourceCatalogId
       if (!id || seen.has(id)) continue
       const problem = catalogById.get(id)
       if (!problem) continue
@@ -157,7 +139,7 @@ export function ProfileSends({ userId }: { userId: string }) {
       out.push(problem)
     }
     return out
-  }, [sends, catalogById])
+  }, [ascents, catalogById])
 
   const current = openId
     ? (pagerStack?.find((p) => p.source_catalog_id === openId) ?? catalogById.get(openId))
@@ -179,10 +161,10 @@ export function ProfileSends({ userId }: { userId: string }) {
     [myAscents],
   )
 
-  const openSend = useCallback(
-    (s: SendItem) => {
-      if (s.sourceCatalogId && catalogById.has(s.sourceCatalogId)) {
-        openProblem(s.sourceCatalogId, sendProblems)
+  const openAscent = useCallback(
+    (a: Ascent) => {
+      if (a.sourceCatalogId && catalogById.has(a.sourceCatalogId)) {
+        openProblem(a.sourceCatalogId, sendProblems)
       }
     },
     [catalogById, openProblem, sendProblems],
@@ -210,40 +192,29 @@ export function ProfileSends({ userId }: { userId: string }) {
     <div className="flex flex-col gap-6">
       <section>
         <h2 className="px-1 pb-2 text-sm font-semibold text-foreground">Grades</h2>
-        <GradePyramid items={pyramidInput} />
+        <GradePyramid items={ascents} />
       </section>
 
-      {session && (
-        <section>
-          <div className="flex items-baseline justify-between px-1 pb-2">
-            <h2 className="text-sm font-semibold text-foreground">Latest session</h2>
-            <span className="text-xs text-muted-foreground">
-              {sessionDate.format(session.date)} · {session.sends.length} climb
-              {session.sends.length === 1 ? '' : 's'}
-            </span>
-          </div>
-          <SendRows
-            sends={session.sends}
-            catalogById={catalogById}
-            showThumbnails={showThumbnails}
-            onOpen={openSend}
-          />
-        </section>
-      )}
-
-      <section className="flex flex-col">
-        <SendRows
-          sends={sends}
-          catalogById={catalogById}
-          showThumbnails={showThumbnails}
-          onOpen={openSend}
-        />
+      <div className="flex flex-col gap-4">
+        {daySessions.map((session) => (
+          <section key={session.dayKey}>
+            <h2 className="px-1 py-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              {session.title}
+            </h2>
+            <SendRows
+              ascents={session.ascents}
+              catalogById={catalogById}
+              showThumbnails={showThumbnails}
+              onOpen={openAscent}
+            />
+          </section>
+        ))}
         {!done && (
-          <Button variant="ghost" className="mt-2 self-center" disabled={loadingMore} onClick={() => void loadMore()}>
+          <Button variant="ghost" className="self-center" disabled={loadingMore} onClick={() => void loadMore()}>
             {loadingMore ? 'Loading…' : 'Load more'}
           </Button>
         )}
-      </section>
+      </div>
 
       <Drawer open={current !== undefined} onOpenChange={(open) => !open && closeDrawer()} showSwipeHandle>
         <DrawerContent>
@@ -267,32 +238,32 @@ export function ProfileSends({ userId }: { userId: string }) {
   )
 }
 
-/** Read-only list of sends as shared AscentRows (no edit pencil, no per-row sent check).
+/** One day-session's sends as shared AscentRows (no edit pencil, no per-row sent check).
  *  Rows whose problem resolves in the viewer's catalog are tappable → the detail drawer. */
 function SendRows({
-  sends,
+  ascents,
   catalogById,
   showThumbnails,
   onOpen,
 }: {
-  sends: SendItem[]
+  ascents: Ascent[]
   catalogById: Map<string, CatalogProblem>
   showThumbnails: boolean
-  onOpen: (send: SendItem) => void
+  onOpen: (ascent: Ascent) => void
 }) {
   return (
     <div className="flex flex-col overflow-hidden rounded-lg border border-border">
-      {sends.map((s) => {
-        const resolved = s.sourceCatalogId ? catalogById.get(s.sourceCatalogId) : undefined
+      {ascents.map((a) => {
+        const resolved = a.sourceCatalogId ? catalogById.get(a.sourceCatalogId) : undefined
         return (
           <AscentRow
-            key={s.ascentId}
-            ascent={toAscent(s)}
+            key={a.id}
+            ascent={a}
             catalog={resolved}
-            board={boardByLayoutId(s.boardLayoutId)}
+            board={boardByLayoutId(a.boardLayoutId)}
             showThumbnail={showThumbnails}
             showSentIndicator={false}
-            onSelect={resolved ? () => onOpen(s) : undefined}
+            onSelect={resolved ? () => onOpen(a) : undefined}
           />
         )
       })}

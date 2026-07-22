@@ -1,0 +1,3 @@
+
+# Local DB connection strings for applying migrations (never commit)
+.env

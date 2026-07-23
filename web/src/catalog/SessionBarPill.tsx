@@ -29,7 +29,7 @@ import { QueueDrawer } from '../sessions/QueueDrawer'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 
-// v2: coordinates went viewport-space → wrapper-relative (see clampPillPos). Deliberately
+// v2: coordinates went viewport-space → wrapper-relative (see measureBounds/clampTo). Deliberately
 // NOT swept by the session sign-out clear (sessionsStore.clearAllSessionState) — it's
 // per-device screen ergonomics (x/y pixels), not session content.
 const PILL_POS_KEY = 'boardhang.sessionPillPos.v2'
@@ -92,22 +92,16 @@ function useDraggablePill(pillRef: RefObject<HTMLDivElement | null>) {
       return null
     }
   })
-  // Re-clamp on mount and on every viewport change (rotation, resize, keyboard) so a
-  // stored or parked position can never strand the pill off-screen while mounted.
-  useEffect(() => {
-    const reclamp = () => setPos((p) => (p ? clampTo(measureBounds(pillRef.current), p.x, p.y) : p))
-    reclamp()
-    window.addEventListener('resize', reclamp)
-    return () => window.removeEventListener('resize', reclamp)
-  }, [pillRef])
-
   // The live drag never touches React state: pointermove moves the pill via a
   // compositor-only transform written straight from the handler — browsers align
   // pointermove delivery to the frame clock, so a rAF hop here would only add a frame
   // of finger-to-pill lag. Position/bounds are measured once at drag start; the real
-  // left/top (plus localStorage) commit only on release. Anything per-move — setState,
-  // layout reads, style-prop churn — is what made the drag stutter.
+  // left/top (plus localStorage) commit only on release, clamped against a FRESH
+  // measurement (the viewport or the pill's own width may have changed mid-gesture).
+  // Anything per-move — setState, layout reads, style-prop churn — is what made the
+  // drag stutter.
   const drag = useRef<{
+    pointerId: number
     startX: number
     startY: number
     originX: number
@@ -118,6 +112,27 @@ function useDraggablePill(pillRef: RefObject<HTMLDivElement | null>) {
     active: boolean
   } | null>(null)
   const suppressClick = useRef(false)
+
+  // Re-clamp on mount, on viewport changes (rotation, resize, keyboard), and on the
+  // pill's own size changes (a realtime lit-problem swap can widen a parked pill past
+  // the shell edge, where overflow-x-hidden would clip its buttons untappably). Never
+  // mid-drag: the gesture's base/bounds are frozen by design — shifting left/top under
+  // the live transform would make the pill jump — and endDrag reconciles on release.
+  useEffect(() => {
+    const reclamp = () => {
+      if (drag.current?.active) return
+      setPos((p) => (p ? clampTo(measureBounds(pillRef.current), p.x, p.y) : p))
+    }
+    reclamp()
+    window.addEventListener('resize', reclamp)
+    const el = pillRef.current
+    const ro = el && typeof ResizeObserver !== 'undefined' ? new ResizeObserver(reclamp) : null
+    if (el && ro) ro.observe(el)
+    return () => {
+      window.removeEventListener('resize', reclamp)
+      ro?.disconnect()
+    }
+  }, [pillRef])
 
   // If the pill unmounts mid-drag (session ended remotely, route change), endDrag never
   // runs — flush the last position so the drag isn't silently discarded.
@@ -139,6 +154,7 @@ function useDraggablePill(pillRef: RefObject<HTMLDivElement | null>) {
     // offsetLeft/offsetTop are wrapper-relative for the absolutely-positioned pill —
     // the same space measureBounds works in.
     drag.current = {
+      pointerId: e.pointerId,
       startX: e.clientX,
       startY: e.clientY,
       originX: el.offsetLeft,
@@ -152,6 +168,10 @@ function useDraggablePill(pillRef: RefObject<HTMLDivElement | null>) {
   const onPointerMove = (e: ReactPointerEvent<HTMLDivElement>) => {
     const d = drag.current
     if (!d) return
+    // The gesture belongs to ONE pointer. Without this gate, a second finger's moves
+    // would compute deltas from the first finger's start coords, steal the capture,
+    // and — its release then being ignored — leave the gesture styles frozen.
+    if (e.pointerId !== d.pointerId) return
     // No button held: the press ended off-pill before we captured (capture is only
     // taken past the threshold), so this is a dead gesture surfacing on hover — drop
     // it instead of letting the pill chase a button-less cursor.
@@ -183,8 +203,9 @@ function useDraggablePill(pillRef: RefObject<HTMLDivElement | null>) {
     }
   }
   const endDrag = (e: ReactPointerEvent<HTMLDivElement>) => {
-    if (!e.isPrimary) return
     const d = drag.current
+    // Only the gesture's own pointer may end it (a second finger's up must not).
+    if (d && e.pointerId !== d.pointerId) return
     drag.current = null
     const el = pillRef.current
     if (el) {
@@ -194,9 +215,14 @@ function useDraggablePill(pillRef: RefObject<HTMLDivElement | null>) {
       el.style.removeProperty('-webkit-backdrop-filter')
     }
     if (d?.active && d.bounds) {
-      // Discrete-event updates flush before the next paint, so clearing the transform
-      // and committing left/top in the same handler can't flash the pre-drag spot.
-      const final = clampTo(d.bounds, d.originX + d.dx, d.originY + d.dy)
+      // Clamp against FRESH bounds — the viewport may have rotated or the pill's
+      // content widened since the gesture froze its snapshot; committing against the
+      // stale one could persist an off-screen or edge-clipped position. One layout
+      // read at release is off the hot path. Discrete-event updates flush before the
+      // next paint, so clearing the transform and committing left/top in the same
+      // handler can't flash the pre-drag spot.
+      const bounds = el ? measureBounds(el) : d.bounds
+      const final = clampTo(bounds, d.originX + d.dx, d.originY + d.dy)
       setPos(final)
       persistPos(final)
     }

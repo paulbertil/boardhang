@@ -73,6 +73,7 @@ export function LogbookExportSection() {
               open={showSignIn}
               onOpenChange={setShowSignIn}
               title="Sign in to export your logbook"
+              hideIntro
             />
           </div>
         ) : status === 'error' ? (

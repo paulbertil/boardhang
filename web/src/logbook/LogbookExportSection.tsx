@@ -6,14 +6,19 @@
 import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
+import { useAuth } from '../auth/AuthProvider'
 import { getCatalogProblemsByIds, type CatalogProblem } from '../catalog/catalogSync'
 import { loadAscents, useEnsureAscentsLoaded } from './ascents'
 import { downloadFile } from './downloadFile'
 import { exportFilename, toCsv, toJson, type ExportFormat } from './logbookExport'
 
 export function LogbookExportSection() {
+  const { status: authStatus, isRestoring } = useAuth()
   const { status, ascents, error } = useEnsureAscentsLoaded()
   const [busy, setBusy] = useState<ExportFormat | null>(null)
+  // Signed out there's nothing to export (the store resets to empty), so explain rather
+  // than showing permanently-disabled buttons. Wait out session restore first.
+  const signedOut = !isRestoring && authStatus === 'signedOut'
   // Gate until the store settles so we never export against a not-yet-loaded set. An
   // empty loaded logbook is fine — it exports a header-only CSV / empty envelope.
   const ready = status === 'loaded'
@@ -54,7 +59,11 @@ export function LogbookExportSection() {
             JSON for a complete backup.
           </p>
         </div>
-        {status === 'error' ? (
+        {signedOut ? (
+          <p className="text-sm text-muted-foreground">
+            Sign in to export your logbook — your ascents sync with your account.
+          </p>
+        ) : status === 'error' ? (
           <div className="space-y-2">
             <p className="text-sm text-destructive" role="alert">
               Couldn't load your logbook{error ? `: ${error}` : ''}.

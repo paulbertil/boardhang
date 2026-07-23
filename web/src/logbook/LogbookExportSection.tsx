@@ -7,12 +7,12 @@ import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { getCatalogProblemsByIds, type CatalogProblem } from '../catalog/catalogSync'
-import { useEnsureAscentsLoaded } from './ascents'
+import { loadAscents, useEnsureAscentsLoaded } from './ascents'
 import { downloadFile } from './downloadFile'
 import { exportFilename, toCsv, toJson, type ExportFormat } from './logbookExport'
 
 export function LogbookExportSection() {
-  const { status, ascents } = useEnsureAscentsLoaded()
+  const { status, ascents, error } = useEnsureAscentsLoaded()
   const [busy, setBusy] = useState<ExportFormat | null>(null)
   // Gate until the store settles so we never export against a not-yet-loaded set. An
   // empty loaded logbook is fine — it exports a header-only CSV / empty envelope.
@@ -50,28 +50,39 @@ export function LogbookExportSection() {
         <div>
           <h2 className="text-sm font-medium">Export your logbook</h2>
           <p className="text-sm text-muted-foreground">
-            Download every ascent you’ve logged, across all boards — CSV for spreadsheets, or
+            Download every ascent you've logged, across all boards — CSV for spreadsheets, or
             JSON for a complete backup.
           </p>
         </div>
-        <div className="flex gap-2">
-          <Button
-            variant="outline"
-            className="flex-1"
-            disabled={!ready || busy !== null}
-            onClick={() => void handleExport('csv')}
-          >
-            {busy === 'csv' ? 'Exporting…' : 'Export CSV'}
-          </Button>
-          <Button
-            variant="outline"
-            className="flex-1"
-            disabled={!ready || busy !== null}
-            onClick={() => void handleExport('json')}
-          >
-            {busy === 'json' ? 'Exporting…' : 'Export JSON'}
-          </Button>
-        </div>
+        {status === 'error' ? (
+          <div className="space-y-2">
+            <p className="text-sm text-destructive" role="alert">
+              Couldn't load your logbook{error ? `: ${error}` : ''}.
+            </p>
+            <Button variant="outline" onClick={() => void loadAscents()}>
+              Retry
+            </Button>
+          </div>
+        ) : (
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              className="flex-1"
+              disabled={!ready || busy !== null}
+              onClick={() => void handleExport('csv')}
+            >
+              {busy === 'csv' ? 'Exporting…' : 'Export CSV'}
+            </Button>
+            <Button
+              variant="outline"
+              className="flex-1"
+              disabled={!ready || busy !== null}
+              onClick={() => void handleExport('json')}
+            >
+              {busy === 'json' ? 'Exporting…' : 'Export JSON'}
+            </Button>
+          </div>
+        )}
       </CardContent>
     </Card>
   )

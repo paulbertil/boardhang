@@ -3,6 +3,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AscentsState } from './ascents'
 
 vi.mock('../auth/AuthProvider', () => ({ useAuth: vi.fn() }))
+vi.mock('../auth/SignInDialog', () => ({
+  SignInDialog: ({ open }: { open: boolean }) => (open ? <div>sign-in dialog</div> : null),
+}))
 vi.mock('./ascents', () => ({ useEnsureAscentsLoaded: vi.fn(), loadAscents: vi.fn() }))
 vi.mock('../catalog/catalogSync', () => ({
   getCatalogProblemsByIds: vi.fn(async () => new Map()),
@@ -117,7 +120,7 @@ describe('LogbookExportSection', () => {
     expect(mockedLoad).toHaveBeenCalledTimes(1)
   })
 
-  it('prompts to sign in (no export buttons) when signed out', () => {
+  it('prompts to sign in (no export buttons) when signed out, and the CTA opens the sign-in flow', () => {
     mockedAuth.mockReturnValue({
       status: 'signedOut',
       isRestoring: false,
@@ -128,6 +131,11 @@ describe('LogbookExportSection', () => {
     expect(screen.getByText(/sign in to export your logbook/i)).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Export CSV' })).toBeNull()
     expect(screen.queryByRole('button', { name: 'Export JSON' })).toBeNull()
+
+    // The dialog is closed until the CTA is clicked.
+    expect(screen.queryByText('sign-in dialog')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Sign in' }))
+    expect(screen.getByText('sign-in dialog')).toBeInTheDocument()
   })
 
   it('disables the export actions while ascents are loading', () => {

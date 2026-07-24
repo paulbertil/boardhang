@@ -6,7 +6,7 @@
 // tapped positions into state.holdsFilter (applyFilters matches problems that
 // use all selected holds).
 
-import { useId, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import { ChevronRight, Pin, RefreshCw } from 'lucide-react'
 import type { CatalogBoardDef } from '../board/boards'
 import type { SavedList } from '../lists/listsTypes'
@@ -138,6 +138,27 @@ export function FilterControls({
   const toggleStatus = (k: StatusKey, active: boolean) =>
     set({ statusFilters: active ? [...state.statusFilters, k] : state.statusFilters.filter((x) => x !== k) })
   const range = state.gradeRange ?? gradeSpan
+  // The grade slider is committed on release, not on every drag tick: writing the URL on each
+  // intermediate value (via onChange → setFilters → navigate) made the drag feel janky, and a
+  // mid-drag gradeSpan change could shift the track under the thumb. While dragging we render
+  // from local state over a frozen span, and only push to filter state on onValueCommitted.
+  const [gradeDrag, setGradeDrag] = useState<[number, number] | null>(null)
+  const gradeSpanFrozen = useRef<[number, number]>(gradeSpan)
+  const gradeValue = gradeDrag ?? [range[0], range[1]]
+  const gradeSliderSpan = gradeDrag ? gradeSpanFrozen.current : gradeSpan
+  // Drop the held drag value once the committed gradeRange has propagated back through the URL
+  // (navigate is async), so the released thumb doesn't snap to its pre-drag spot for a frame. The
+  // collapse-to-null and cancelled-drag paths clear gradeDrag directly (see the slider below).
+  useEffect(() => {
+    if (
+      gradeDrag &&
+      state.gradeRange &&
+      state.gradeRange[0] === gradeDrag[0] &&
+      state.gradeRange[1] === gradeDrag[1]
+    ) {
+      setGradeDrag(null)
+    }
+  }, [state.gradeRange, gradeDrag])
   const secondaryOptions = SORT_KEYS.filter(
     (k) => sortDimension(k) !== sortDimension(state.sortPrimary),
   )
@@ -189,18 +210,35 @@ export function FilterControls({
         </Field>
       </div>
 
-      <Field label={`Grade · ${FONT_GRADES[range[0]]} – ${FONT_GRADES[range[1]]}`} pin={pin('grade')}>
-        <Slider
-          aria-label="Grade range"
-          min={gradeSpan[0]}
-          max={gradeSpan[1]}
-          step={1}
-          value={[range[0], range[1]]}
-          onValueChange={(value) => {
-            const [lo, hi] = value as number[]
-            set({ gradeRange: lo === gradeSpan[0] && hi === gradeSpan[1] ? null : [lo, hi] })
-          }}
-        />
+      <Field label={`Grade · ${FONT_GRADES[gradeValue[0]]} – ${FONT_GRADES[gradeValue[1]]}`} pin={pin('grade')}>
+        {/* onPointerCancel catches OS-cancelled drags (system gesture, notification): Base UI has
+            no pointercancel listener, so onValueCommitted never fires and gradeDrag would stick.
+            pointercancel bubbles from the thumb to this wrapper regardless of pointer capture. */}
+        <div onPointerCancel={() => setGradeDrag(null)}>
+          <Slider
+            aria-label="Grade range"
+            min={gradeSliderSpan[0]}
+            max={gradeSliderSpan[1]}
+            step={1}
+            value={gradeValue}
+            onValueChange={(value) => {
+              const [lo, hi] = value as number[]
+              // Freeze the span on the first tick of a drag so a streaming gradeSpan can't move it.
+              if (gradeDrag === null) gradeSpanFrozen.current = gradeSpan
+              setGradeDrag([lo, hi])
+            }}
+            onValueCommitted={(value) => {
+              const [lo, hi] = value as number[]
+              const [spanLo, spanHi] = gradeSpanFrozen.current
+              const collapsed = lo === spanLo && hi === spanHi
+              set({ gradeRange: collapsed ? null : [lo, hi] })
+              // Collapsed → the view falls back to the live gradeSpan synchronously, so drop the
+              // held value now. Otherwise keep showing it until the committed range propagates
+              // back (the effect above clears it), avoiding a one-frame snap-back to the old value.
+              if (collapsed) setGradeDrag(null)
+            }}
+          />
+        </div>
       </Field>
 
       <Field label="Holds" pin={pin('holds')}>

@@ -6,7 +6,7 @@
 // tapped positions into state.holdsFilter (applyFilters matches problems that
 // use all selected holds).
 
-import { useId, useState } from 'react'
+import { useId, useRef, useState } from 'react'
 import { ChevronRight, RefreshCw } from 'lucide-react'
 import type { CatalogBoardDef } from '../board/boards'
 import type { SavedList } from '../lists/listsTypes'
@@ -97,6 +97,14 @@ export function FilterControls({
   const toggleStatus = (k: StatusKey, active: boolean) =>
     set({ statusFilters: active ? [...state.statusFilters, k] : state.statusFilters.filter((x) => x !== k) })
   const range = state.gradeRange ?? gradeSpan
+  // The grade slider is committed on release, not on every drag tick: writing the URL on each
+  // intermediate value (via onChange → setFilters → navigate) made the drag feel janky, and a
+  // mid-drag gradeSpan change could shift the track under the thumb. While dragging we render
+  // from local state over a frozen span, and only push to filter state on onValueCommitted.
+  const [gradeDrag, setGradeDrag] = useState<[number, number] | null>(null)
+  const gradeSpanFrozen = useRef<[number, number]>(gradeSpan)
+  const gradeValue = gradeDrag ?? [range[0], range[1]]
+  const gradeSliderSpan = gradeDrag ? gradeSpanFrozen.current : gradeSpan
   const secondaryOptions = SORT_KEYS.filter(
     (k) => sortDimension(k) !== sortDimension(state.sortPrimary),
   )
@@ -148,16 +156,24 @@ export function FilterControls({
         </Field>
       </div>
 
-      <Field label={`Grade · ${FONT_GRADES[range[0]]} – ${FONT_GRADES[range[1]]}`}>
+      <Field label={`Grade · ${FONT_GRADES[gradeValue[0]]} – ${FONT_GRADES[gradeValue[1]]}`}>
         <Slider
           aria-label="Grade range"
-          min={gradeSpan[0]}
-          max={gradeSpan[1]}
+          min={gradeSliderSpan[0]}
+          max={gradeSliderSpan[1]}
           step={1}
-          value={[range[0], range[1]]}
+          value={gradeValue}
           onValueChange={(value) => {
             const [lo, hi] = value as number[]
-            set({ gradeRange: lo === gradeSpan[0] && hi === gradeSpan[1] ? null : [lo, hi] })
+            // Freeze the span on the first tick of a drag so a streaming gradeSpan can't move it.
+            if (gradeDrag === null) gradeSpanFrozen.current = gradeSpan
+            setGradeDrag([lo, hi])
+          }}
+          onValueCommitted={(value) => {
+            const [lo, hi] = value as number[]
+            const [spanLo, spanHi] = gradeSpanFrozen.current
+            set({ gradeRange: lo === spanLo && hi === spanHi ? null : [lo, hi] })
+            setGradeDrag(null)
           }}
         />
       </Field>

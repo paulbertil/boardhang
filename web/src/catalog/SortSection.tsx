@@ -2,12 +2,9 @@
 // "Sort by ⟨primary⟩ then ⟨secondary⟩", each ⟨…⟩ a dropdown. The tiebreak reads as
 // secondary (muted). The sort facet's pin is anchored top-right, centred on the first
 // line (the min-h-8 box) so it stays put when the phrase wraps on narrow screens.
-import { SORT_LABELS, type SortKey } from './filters'
+import { SORT_KEYS, SORT_LABELS, type SortKey } from './filters'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { cn } from '@/lib/utils'
-
-// Display order for the sort options (mirrors FilterControls' SORT_KEYS).
-const SORT_KEYS: SortKey[] = ['easiest', 'hardest', 'rated', 'repeats']
 
 const labelCls = 'text-xs font-medium text-muted-foreground'
 

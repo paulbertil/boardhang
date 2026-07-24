@@ -16,6 +16,9 @@ export const SORT_LABELS: Record<SortKey, string> = {
   repeats: 'Most repeats',
 }
 
+/** Display order for the sort options (primary + secondary dropdowns). */
+export const SORT_KEYS: readonly SortKey[] = ['easiest', 'hardest', 'rated', 'repeats']
+
 /** Ascent-status filter keys (iOS "My ascents" / "Not completed" / "Not logged"),
  *  web-native labels. sent wins over attempted when a problem has both. */
 export type StatusKey = 'sent' | 'attempted' | 'unlogged'

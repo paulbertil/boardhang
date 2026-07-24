@@ -19,6 +19,7 @@ import {
   BENCHMARK_LABEL,
   FAVORITES_LABEL,
   METHOD_LABELS,
+  SORT_KEYS,
   SORT_LABELS,
   sortDimension,
   type FilterState,
@@ -38,7 +39,11 @@ import { cn } from '@/lib/utils'
 import type { PinnableFacetId } from './pinnableFacets'
 import { togglePinned, usePinnedFacets } from './pinnedFiltersStore'
 
-const SORT_KEYS: SortKey[] = ['easiest', 'hardest', 'rated', 'repeats']
+// Tinted pill for the grade min/max readout. dark: uses a lighter blue so the
+// grades stay legible on bg-primary/10 in dark mode (text-primary is too dim there).
+const gradeBadgeCls =
+  'rounded-md bg-primary/10 px-2 py-0.5 text-xs font-semibold tabular-nums text-primary dark:text-blue-200'
+
 const RATING_LABELS: Record<string, string> = {
   '0': 'Any rating',
   '1': '1★ and up',
@@ -190,15 +195,11 @@ export function FilterControls({
         <div className="flex items-center gap-2">
           <span className="text-xs font-medium text-muted-foreground">Grade</span>
           <div className="ml-auto flex items-center gap-1.5">
-            <span className="rounded-md bg-primary/10 px-2 py-0.5 text-xs font-semibold tabular-nums text-primary dark:text-[#bcd2ff]">
-              {FONT_GRADES[gradeValue[0]]}
-            </span>
+            <span className={gradeBadgeCls}>{FONT_GRADES[gradeValue[0]]}</span>
             {gradeValue[1] !== gradeValue[0] && (
               <>
                 <span className="text-xs text-muted-foreground">to</span>
-                <span className="rounded-md bg-primary/10 px-2 py-0.5 text-xs font-semibold tabular-nums text-primary dark:text-[#bcd2ff]">
-                  {FONT_GRADES[gradeValue[1]]}
-                </span>
+                <span className={gradeBadgeCls}>{FONT_GRADES[gradeValue[1]]}</span>
               </>
             )}
           </div>

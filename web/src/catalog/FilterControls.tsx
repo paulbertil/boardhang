@@ -14,10 +14,12 @@ import { FONT_GRADES } from '../board/grades'
 import { HoldFilterPicker } from './HoldFilterPicker'
 import { MemberStatusRow } from './MemberStatusRow'
 import { useSessionFilterRows } from './useSessionFilterRows'
+import { SortSection } from './SortSection'
 import {
   BENCHMARK_LABEL,
   FAVORITES_LABEL,
   METHOD_LABELS,
+  SORT_KEYS,
   SORT_LABELS,
   sortDimension,
   type FilterState,
@@ -37,7 +39,11 @@ import { cn } from '@/lib/utils'
 import type { PinnableFacetId } from './pinnableFacets'
 import { togglePinned, usePinnedFacets } from './pinnedFiltersStore'
 
-const SORT_KEYS: SortKey[] = ['easiest', 'hardest', 'rated', 'repeats']
+// Tinted pill for the grade min/max readout. dark: uses a lighter blue so the
+// grades stay legible on bg-primary/10 in dark mode (text-primary is too dim there).
+const gradeBadgeCls =
+  'rounded-md bg-primary/10 px-2 py-0.5 text-xs font-semibold tabular-nums text-primary dark:text-blue-200'
+
 const RATING_LABELS: Record<string, string> = {
   '0': 'Any rating',
   '1': '1★ and up',
@@ -78,7 +84,7 @@ function Field({
 }) {
   return (
     <div className={cn('space-y-1.5', className)}>
-      <div className="flex items-center justify-between gap-2">
+      <div className="flex min-h-6 items-center justify-between gap-2">
         <div className="text-xs font-medium text-muted-foreground">{label}</div>
         {pin}
       </div>
@@ -107,7 +113,7 @@ function PinToggle({
       title={pinned ? 'Unpin from filter bar' : 'Pin to filter bar'}
       className={cn(
         'shrink-0 rounded-md p-1 transition-colors',
-        pinned ? 'text-primary' : 'text-muted-foreground/40 hover:text-foreground',
+        pinned ? 'bg-primary/10 text-primary' : 'text-muted-foreground/40 hover:text-foreground',
       )}
     >
       <Pin className={cn('size-3.5', pinned && 'fill-current')} aria-hidden />
@@ -174,47 +180,35 @@ export function FilterControls({
 
   return (
     <div className="space-y-5">
-      <div className="flex gap-2">
-        <Field label="Sort" className="flex-1" pin={pin('sort')}>
-          <Select items={SORT_LABELS} value={state.sortPrimary} onValueChange={(v) => changePrimary(v as SortKey)}>
-            <SelectTrigger className="w-full">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {SORT_KEYS.map((k) => (
-                <SelectItem key={k} value={k}>
-                  {SORT_LABELS[k]}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </Field>
-        <Field label="Then by" className="flex-1">
-          <Select
-            items={secondaryItems}
-            value={state.sortSecondary ?? 'none'}
-            onValueChange={(v) => set({ sortSecondary: v === 'none' ? null : (v as SortKey) })}
-          >
-            <SelectTrigger className="w-full">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="none">No tiebreak</SelectItem>
-              {secondaryOptions.map((k) => (
-                <SelectItem key={k} value={k}>
-                  {SORT_LABELS[k]}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </Field>
-      </div>
+      <SortSection
+        primary={state.sortPrimary}
+        secondary={state.sortSecondary}
+        onChangePrimary={changePrimary}
+        onChangeSecondary={(k) => set({ sortSecondary: k })}
+        secondaryOptions={secondaryOptions}
+        secondaryItems={secondaryItems}
+        pin={pin('sort')}
+      />
 
-      <Field label={`Grade · ${FONT_GRADES[gradeValue[0]]} – ${FONT_GRADES[gradeValue[1]]}`} pin={pin('grade')}>
+      <div className="space-y-2">
+        {/* Header carries the live min–max readout (pin + title left, grades right). */}
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-medium text-muted-foreground">Grade</span>
+          <div className="ml-auto flex items-center gap-1.5">
+            <span className={gradeBadgeCls}>{FONT_GRADES[gradeValue[0]]}</span>
+            {gradeValue[1] !== gradeValue[0] && (
+              <>
+                <span className="text-xs text-muted-foreground">to</span>
+                <span className={gradeBadgeCls}>{FONT_GRADES[gradeValue[1]]}</span>
+              </>
+            )}
+          </div>
+          {pin('grade')}
+        </div>
         {/* onPointerCancel catches OS-cancelled drags (system gesture, notification): Base UI has
             no pointercancel listener, so onValueCommitted never fires and gradeDrag would stick.
             pointercancel bubbles from the thumb to this wrapper regardless of pointer capture. */}
-        <div onPointerCancel={() => setGradeDrag(null)}>
+        <div onPointerCancel={() => setGradeDrag(null)} className="px-0.5">
           <Slider
             aria-label="Grade range"
             min={gradeSliderSpan[0]}
@@ -239,7 +233,7 @@ export function FilterControls({
             }}
           />
         </div>
-      </Field>
+      </div>
 
       <Field label="Holds" pin={pin('holds')}>
         <button

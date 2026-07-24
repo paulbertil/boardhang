@@ -22,6 +22,9 @@ export interface ProblemLogContext {
   /** Today's unsent attempt row (UTC-day bucket — the same bucket the deterministic
    *  attempt id merges on), or null. A send absorbs this row. */
   todayAttempt: Ascent | null
+  /** The most recent send already logged today (LOCAL day — the user's "today", the
+   *  same day the logbook groups by), or null. A second same-day send asks first. */
+  todaySend: Ascent | null
   /** Distinct earlier local days with any logged rows (attempts or sends). */
   priorDays: number
   /** Any logged history at all for this problem. */
@@ -38,12 +41,14 @@ export function problemLogContext(
   const today = utcDay(now)
   const todayAttempt = rows.find((a) => !a.sent && utcDay(new Date(a.date)) === today) ?? null
   const todayLocal = localDayKey(now)
+  let todaySend: Ascent | null = null
   const priorDayKeys = new Set<string>()
   for (const a of rows) {
     const key = localDayKey(new Date(a.date))
     if (key < todayLocal) priorDayKeys.add(key)
+    if (a.sent && key === todayLocal && (!todaySend || a.date > todaySend.date)) todaySend = a
   }
-  return { todayAttempt, priorDays: priorDayKeys.size, hasHistory: rows.length > 0 }
+  return { todayAttempt, todaySend, priorDays: priorDayKeys.size, hasHistory: rows.length > 0 }
 }
 
 /** Ids of ascents whose problem has an earlier-dated logged row (attempt or send) —

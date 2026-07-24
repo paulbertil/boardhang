@@ -39,6 +39,14 @@ import { ProblemDetailQueueStrip } from './ProblemDetailQueueStrip'
 import { useActiveQueueProblems } from '../sessions/useActiveQueueProblems'
 import { useShowPreviews } from './previewsStore'
 import { Button } from '@/components/ui/button'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 
 interface ProblemDetailProps {
   /** The problem to show (resolved from ?problem, with full-slab fallback, upstream). */
@@ -92,6 +100,8 @@ export function ProblemDetail({
   const [logTarget, setLogTarget] = useState<LogTarget | null>(null)
   const [logOpen, setLogOpen] = useState(false)
   const [signInOpen, setSignInOpen] = useState(false)
+  // "Log ascent" on a problem already sent today — confirm before logging a duplicate.
+  const [relogConfirmOpen, setRelogConfirmOpen] = useState(false)
   // Inline "Log try" stepper state: session-local pending tries for the shown problem,
   // written (merged) to the unsent-attempt row only when leaving the problem (iOS parity).
   // The pending problem is held as the object so a leave-flush needs no list lookup.
@@ -238,15 +248,11 @@ export function ProblemDetail({
     })
   }
 
-  // "Log ascent" opens the full sheet as a SEND that folds in the day's earlier tries:
-  // the attempt row flushed earlier today (absorbed + soft-deleted on save) plus the
-  // inline stepper, plus 1 for the successful go — the stepper counts failed goes.
+  // Open the full sheet as a SEND that folds in the day's earlier tries: the attempt
+  // row flushed earlier today (absorbed + soft-deleted on save) plus the inline
+  // stepper, plus 1 for the successful go — the stepper counts failed goes.
   // The sheet also learns the problem's logged past (Flash vs Session flash).
-  function logAscent() {
-    if (!signedIn) {
-      setSignInOpen(true)
-      return
-    }
+  function openLogSheet() {
     const context = problemLogContext(ascents, currentId, new Date())
     const earlierToday = (context.todayAttempt?.tries ?? 0) + currentTries
     setLogTarget({
@@ -265,6 +271,20 @@ export function ProblemDetail({
       hasPriorHistory: context.hasHistory || currentTries > 0,
     })
     setLogOpen(true)
+  }
+
+  // "Log ascent" — but a send already logged today asks first (a second same-day send
+  // is a deliberate duplicate, usually a mis-tap), then proceeds via openLogSheet.
+  function logAscent() {
+    if (!signedIn) {
+      setSignInOpen(true)
+      return
+    }
+    if (problemLogContext(ascents, currentId, new Date()).todaySend) {
+      setRelogConfirmOpen(true)
+      return
+    }
+    openLogSheet()
   }
 
   // Side-swipe the board to page prev/next (vertical drags fall through to the
@@ -432,6 +452,30 @@ export function ProblemDetail({
           setPendingTries(0)
         }}
       />
+      <Dialog open={relogConfirmOpen} onOpenChange={setRelogConfirmOpen}>
+        <DialogContent showCloseButton={false}>
+          <DialogHeader>
+            <DialogTitle>Already sent today</DialogTitle>
+            <DialogDescription>
+              You already logged a send of {current.name} today. Log it again as a separate
+              entry?
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRelogConfirmOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={() => {
+                setRelogConfirmOpen(false)
+                openLogSheet()
+              }}
+            >
+              Log again
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       <SignInDialog
         open={signInOpen}
         onOpenChange={setSignInOpen}

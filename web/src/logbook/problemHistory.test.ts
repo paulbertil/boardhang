@@ -35,9 +35,28 @@ describe('problemLogContext', () => {
     const other = ascent({ sourceCatalogId: 'cat-2' })
     expect(problemLogContext([other], 'cat-1', now)).toEqual({
       todayAttempt: null,
+      todaySend: null,
       priorDays: 0,
       hasHistory: false,
     })
+  })
+
+  it('finds today’s most recent send by local day, ignoring attempts and other days', () => {
+    const earlierSendToday = ascent({ id: 's1', sent: true, date: '2026-07-24T08:00:00.000Z' })
+    const laterSendToday = ascent({ id: 's2', sent: true, date: '2026-07-24T12:00:00.000Z' })
+    const attemptToday = ascent({ id: 'att', sent: false, date: '2026-07-24T09:00:00.000Z' })
+    const sendYesterday = ascent({ id: 'old', sent: true, date: '2026-07-23T09:00:00.000Z' })
+    const context = problemLogContext(
+      [earlierSendToday, sendYesterday, laterSendToday, attemptToday],
+      'cat-1',
+      now,
+    )
+    expect(context.todaySend?.id).toBe('s2')
+  })
+
+  it('has no todaySend when the only send is from an earlier day', () => {
+    const sendYesterday = ascent({ id: 'old', sent: true, date: '2026-07-23T09:00:00.000Z' })
+    expect(problemLogContext([sendYesterday], 'cat-1', now).todaySend).toBeNull()
   })
 
   it('finds today’s unsent attempt row by UTC day, ignoring sends and other days', () => {

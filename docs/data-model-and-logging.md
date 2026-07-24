@@ -104,6 +104,9 @@ day's tries into an explicit send instead of leaving two rows for the day:
 - Attempt rows from earlier days are untouched history — a send never rewrites a past day.
   Tries logged *after* a send revive a fresh attempt row for that day (deterministic-id
   semantics), which then shows as its own entry.
+- A problem **already sent today** (local day) asks before logging again — "Log ascent"
+  opens a confirm dialog ("Already sent today … Log it again as a separate entry?") so a
+  duplicate same-day send is always deliberate, never a mis-tap.
 
 iOS does not absorb yet — it still writes the send alongside the day's attempt row.
 

@@ -312,6 +312,9 @@ export function CatalogScreen() {
             inSession={sessionForBoard !== null}
             statusReady={statusReady}
             boardLists={boardLists}
+            layoutId={board.layoutId}
+            gradeSpan={gradeSpan}
+            board={board}
           />,
           headerFilterSlot,
         )}

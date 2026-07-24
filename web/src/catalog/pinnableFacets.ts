@@ -39,13 +39,14 @@ export interface PinnableFacet {
   kind: FacetKind
 }
 
-/** Fixed nav order for pinned controls; also the order pin rows read in the sheet. */
+/** Fixed left-to-right nav order for pinned controls. Benchmarks and Favorites lead (the two
+ *  most-reached-for toggles), then the rich facets in a stable order. */
 export const CANONICAL_ORDER: readonly PinnableFacet[] = [
+  { id: 'benchmarks', label: BENCHMARK_LABEL, kind: 'toggle' },
+  { id: 'favorites', label: FAVORITES_LABEL, kind: 'toggle' },
   { id: 'sort', label: 'Sort', kind: 'rich' },
   { id: 'grade', label: 'Grade', kind: 'rich' },
   { id: 'holds', label: 'Holds', kind: 'rich' },
-  { id: 'benchmarks', label: BENCHMARK_LABEL, kind: 'toggle' },
-  { id: 'favorites', label: FAVORITES_LABEL, kind: 'toggle' },
   { id: 'stars', label: 'Min rating', kind: 'rich' },
   { id: 'status', label: 'Ascent status', kind: 'rich' },
   { id: 'methods', label: 'Method', kind: 'rich' },
@@ -92,7 +93,9 @@ export function isFacetActive(id: PinnableFacetId, s: FilterState, ctx: FacetCon
   }
 }
 
-/** The value shown on a rich facet's nav control when active (collapsed for multi-selects). */
+/** The label shown on a rich facet's nav control: the collapsed active value when the facet is
+ *  filtering, otherwise the bare facet name (so an inactive pinned control reads "Holds", not
+ *  "Holds (0)"). Sort always shows its current value — it's never "off". */
 export function facetActiveLabel(id: PinnableFacetId, s: FilterState): string {
   switch (id) {
     case 'grade': {
@@ -101,13 +104,15 @@ export function facetActiveLabel(id: PinnableFacetId, s: FilterState): string {
       return `${FONT_GRADES[lo]}–${FONT_GRADES[hi]}`
     }
     case 'holds':
-      return `Holds (${s.holdsFilter.length})`
+      return s.holdsFilter.length === 0 ? FACET_BY_ID.holds.label : `Holds (${s.holdsFilter.length})`
     case 'stars':
-      return `≥${s.minStars}★`
+      return s.minStars === 0 ? FACET_BY_ID.stars.label : `≥${s.minStars}★`
     case 'methods':
+      if (s.methods.length === 0) return FACET_BY_ID.methods.label
       return s.methods.length === 1 ? s.methods[0] : `Methods (${s.methods.length})`
     case 'status': {
       const keys = s.statusFilters
+      if (keys.length === 0) return FACET_BY_ID.status.label
       return keys.length === 1 ? STATUS_LABELS[keys[0] as StatusKey] : `Status (${keys.length})`
     }
     case 'sort':

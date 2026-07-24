@@ -67,13 +67,14 @@ interface FacetControlPopoverProps {
   board: CatalogBoardDef
 }
 
-/** Shared nav-trigger styling: accent fill when active, outline when not. */
+/** Shared nav-trigger styling: the tinted accent "on" look when active (matching the pressed
+ *  Benchmarks/Favorites toggles), a plain outline when not — never the loud solid primary. */
 function triggerClass(active: boolean): string {
   return cn(
     'inline-flex h-6 shrink-0 items-center gap-1 rounded-md px-2 text-xs font-medium transition-colors',
     active
-      ? 'bg-primary text-primary-foreground'
-      : 'border border-input bg-transparent text-foreground hover:bg-accent',
+      ? 'border border-accent bg-accent text-accent-foreground'
+      : 'border border-input bg-transparent text-foreground hover:bg-muted hover:text-foreground',
   )
 }
 

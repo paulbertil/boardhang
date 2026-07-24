@@ -59,6 +59,14 @@ export function FilterPillBar({
     (chip) => !pinned.includes(chipFacetId(chip.id)),
   )
 
+  // Does any pinned control actually render? (Lists is hidden with no lists; Status is hidden in
+  // a session.) The divider only shows when there's a left group AND chips to divide from it.
+  const hasPinnedControls = pinned.some((id) => {
+    if (id === 'lists') return boardLists.length > 0
+    if (id === 'status') return !inSession
+    return true
+  })
+
   return (
     // -mx-4 + px-4: cancel the header's 1rem side padding so the scroll track spans the
     // full frosted column, while px-4 insets the first/last item back onto the 1rem grid.
@@ -148,9 +156,11 @@ export function FilterPillBar({
         }
       })}
 
-      {/* Divider between the pinned controls and the removable active-filter tags. Only when
-          there are tags — a trailing divider with nothing after reads as a mistake. */}
-      {chips.length > 0 && <div aria-hidden className="h-4 w-px shrink-0 bg-border" />}
+      {/* Divider between the pinned controls and the removable active-filter tags — only when
+          BOTH sides are present, else a leading/trailing rule reads as a mistake. */}
+      {hasPinnedControls && chips.length > 0 && (
+        <div aria-hidden className="h-4 w-px shrink-0 bg-border" />
+      )}
 
       {chips.map((chip) => (
         <button

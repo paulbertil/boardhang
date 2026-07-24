@@ -5,6 +5,7 @@
 
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { getRouteApi } from '@tanstack/react-router'
+import { ChevronDown } from 'lucide-react'
 import { useAuth } from '../auth/AuthProvider'
 import { SignInPanel } from '../auth/SignInPanel'
 import { useBoardStore } from '../board/boardStore'
@@ -14,6 +15,11 @@ import { ProblemDetail } from '../catalog/ProblemDetail'
 import { useProblemDrawer } from '../catalog/useProblemDrawer'
 import { useShowPreviews } from '../catalog/previewsStore'
 import { Button } from '@/components/ui/button'
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from '@/components/ui/collapsible'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Drawer, DrawerContent, DrawerTitle } from '@/components/ui/drawer'
 import { useEnsureAscentsLoaded, type Ascent } from './ascents'
@@ -22,7 +28,7 @@ import { GradePyramid } from './GradePyramid'
 import { LogAscentSheet, type LogTarget } from './LogAscentSheet'
 import { MoonBoardImportBanner } from './MoonBoardImportBanner'
 import { priorHistoryIds } from './problemHistory'
-import { sessions } from './sessions'
+import { localDayKey, sessions } from './sessions'
 
 const routeApi = getRouteApi('/logbook')
 
@@ -230,10 +236,23 @@ export function LogbookScreen() {
           // order. Tapping any row in the session pages within exactly this list.
           const sessionProblems = resolveSession(session.ascents, catalogById)
           return (
-            <section key={session.dayKey}>
-              <h2 className="px-1 py-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                {session.title}
+            // Past days fold behind their header (chevron); only today starts open, so
+            // the current session stays front and center as the history grows.
+            <Collapsible
+              key={session.dayKey}
+              defaultOpen={session.dayKey === localDayKey(new Date())}
+              render={<section />}
+            >
+              <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                <CollapsibleTrigger className="group flex w-full items-center justify-between px-1 py-1">
+                  {session.title}
+                  <ChevronDown
+                    className="size-4 transition-transform group-data-panel-open:rotate-180 motion-reduce:transition-none"
+                    aria-hidden
+                  />
+                </CollapsibleTrigger>
               </h2>
+              <CollapsibleContent>
               <div className="overflow-hidden rounded-lg border border-border">
                 {session.ascents.map((ascent) => {
                   // Only rows whose catalog entry resolved open the detail drawer; a
@@ -259,7 +278,8 @@ export function LogbookScreen() {
                   )
                 })}
               </div>
-            </section>
+              </CollapsibleContent>
+            </Collapsible>
           )
         })}
       </div>

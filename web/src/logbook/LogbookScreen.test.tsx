@@ -124,6 +124,14 @@ afterEach(() => {
   window.dispatchEvent(new StorageEvent('storage'))
 })
 
+// Day sections other than today's start collapsed behind their chevron header —
+// expand them so row assertions can reach their content.
+function expandPastDays() {
+  for (const trigger of screen.queryAllByRole('button', { name: /— \d+ problem/ })) {
+    if (trigger.getAttribute('aria-expanded') === 'false') fireEvent.click(trigger)
+  }
+}
+
 describe('LogbookScreen — no board added', () => {
   it('shows the add-a-board empty state instead of any board name', () => {
     boardState.addedBoards = []
@@ -230,6 +238,7 @@ describe('LogbookScreen — import-from-MoonBoard affordance', () => {
     boardState.addedBoards = [addedBoard]
     ascentsState.ascents = [populatedAscent]
     render(<LogbookScreen />)
+    expandPastDays()
 
     expect(screen.getByText('CRIMP CITY')).toBeInTheDocument()
     const banner = screen.getByRole('region', { name: 'Import from MoonBoard' })
@@ -277,6 +286,7 @@ describe('LogbookScreen — row tap-through to problem detail', () => {
     catalogMap = new Map([['p-1', { source_catalog_id: 'p-1', angle: 40 } as CatalogProblem]])
 
     render(<LogbookScreen />)
+    expandPastDays()
 
     const row = await screen.findByRole('button', { name: 'Open CRIMP CITY' })
     fireEvent.click(row)
@@ -299,6 +309,7 @@ describe('LogbookScreen — row tap-through to problem detail', () => {
     ])
 
     const { container } = render(<LogbookScreen />)
+    expandPastDays()
 
     await screen.findByRole('button', { name: 'Open CRIMP CITY' })
     expect(container.querySelector('.catalog-board')).not.toBeNull()
@@ -312,6 +323,7 @@ describe('LogbookScreen — row tap-through to problem detail', () => {
     ascentsState.ascents = [{ ...baseAscent, sourceCatalogId: null }]
 
     render(<LogbookScreen />)
+    expandPastDays()
 
     expect(screen.queryByRole('button', { name: 'Open CRIMP CITY' })).toBeNull()
     expect(screen.getByText('CRIMP CITY')).toBeInTheDocument()
@@ -333,6 +345,7 @@ describe('LogbookScreen — row tap-through to problem detail', () => {
     )
 
     render(<LogbookScreen />)
+    expandPastDays()
 
     fireEvent.click(await screen.findByRole('button', { name: 'Open ULTIMATE' }))
 
@@ -349,6 +362,7 @@ describe('LogbookScreen — row tap-through to problem detail', () => {
     catalogMap = new Map([['p-mon', { source_catalog_id: 'p-mon', angle: 40 } as CatalogProblem]])
 
     render(<LogbookScreen />)
+    expandPastDays()
 
     fireEvent.click(await screen.findByRole('button', { name: 'Open STRETCHY PANTS' }))
 
@@ -362,6 +376,7 @@ describe('LogbookScreen — row tap-through to problem detail', () => {
     catalogMap = new Map([['p-1', { source_catalog_id: 'p-1', angle: 40 } as CatalogProblem]])
 
     render(<LogbookScreen />)
+    expandPastDays()
     fireEvent.click(await screen.findByRole('button', { name: 'Open CRIMP CITY' }))
 
     // Push-opened → closing pops history (Back) rather than clearing the param in place.
@@ -397,6 +412,7 @@ describe('LogbookScreen — row tap-through to problem detail', () => {
     )
 
     render(<LogbookScreen />)
+    expandPastDays()
     fireEvent.click(await screen.findByRole('button', { name: 'Open ULTIMATE' }))
     expect((await screen.findByTestId('detail')).getAttribute('data-ids')).toBe('p-1,p-2')
 
@@ -405,5 +421,48 @@ describe('LogbookScreen — row tap-through to problem detail', () => {
     const replaceCall = navigate.mock.calls.find((c) => (c[0] as NavOpts | undefined)?.replace)
     expect((replaceCall![0] as NavOpts).search!({ problem: 'p-1' })).toEqual({ problem: 'p-2' })
     expect((await screen.findByTestId('detail')).getAttribute('data-ids')).toBe('p-1,p-2')
+  })
+})
+
+describe('LogbookScreen — collapsible day sessions', () => {
+  const addedBoard = { layoutId: 7, name: 'Mini MoonBoard 2025' }
+  const baseAscent = {
+    id: 'a1',
+    date: '2026-07-01',
+    boardLayoutId: 7,
+    problemName: 'CRIMP CITY',
+    problemGrade: '6A',
+    votedGrade: '6A',
+    tries: 1,
+    stars: 0,
+    comment: '',
+    sent: false,
+    sourceCatalogId: null as string | null,
+    userProblemId: null as string | null,
+  }
+
+  it("expands today's session and collapses past days by default", () => {
+    boardState.addedBoards = [addedBoard]
+    ascentsState.ascents = [
+      { ...baseAscent, id: 't1', date: new Date().toISOString(), problemName: 'TODAY PROB' },
+      { ...baseAscent, id: 'o1', date: '2026-07-01', problemName: 'OLD PROB' },
+    ]
+    render(<LogbookScreen />)
+
+    expect(screen.getByText('TODAY PROB')).toBeInTheDocument()
+    expect(screen.queryByText('OLD PROB')).toBeNull()
+  })
+
+  it('expands a past day via its chevron header, and collapses it again', () => {
+    boardState.addedBoards = [addedBoard]
+    ascentsState.ascents = [{ ...baseAscent, id: 'o1', problemName: 'OLD PROB' }]
+    render(<LogbookScreen />)
+
+    expect(screen.queryByText('OLD PROB')).toBeNull()
+    const trigger = screen.getByRole('button', { name: /— 1 problem/ })
+    fireEvent.click(trigger)
+    expect(screen.getByText('OLD PROB')).toBeInTheDocument()
+    fireEvent.click(trigger)
+    expect(screen.queryByText('OLD PROB')).toBeNull()
   })
 })

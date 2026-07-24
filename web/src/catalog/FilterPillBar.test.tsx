@@ -28,6 +28,7 @@ function renderBar(over: Partial<Parameters<typeof FilterPillBar>[0]> = {}) {
       onChange={over.onChange ?? (() => {})}
       inSession={false}
       statusReady={false}
+      signedOut={over.signedOut ?? false}
       boardLists={over.boardLists ?? []}
       layoutId={over.layoutId ?? 7}
       gradeSpan={[3, 15]}
@@ -78,6 +79,12 @@ describe('FilterPillBar — pinned controls vs. active chips', () => {
     renderBar({ layoutId: 103, filters: state({ gradeRange: [4, 8] }) })
     // Rendered once, as the pinned control — never also as a removable chip.
     expect(screen.queryByRole('button', { name: /^Remove .* filter$/ })).toBeNull()
+  })
+
+  it('suppresses a pinned Status control when signed out (status cannot filter)', () => {
+    localStorage.setItem('catalogPinnedFilters_105', JSON.stringify(['status']))
+    renderBar({ layoutId: 105, signedOut: true })
+    expect(screen.queryByRole('button', { name: 'Ascent status' })).toBeNull()
   })
 
   it('shows an unpinned active toggle facet (Favorites) as a removable chip, not vanished', () => {

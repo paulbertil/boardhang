@@ -253,7 +253,9 @@ export function FilterControls({
 
       {/* Ascent status: one self row when solo, one row per member (self first) in a session.
           Soft-caps at ~8 rows; the section scrolls within the sheet on mobile. */}
-      <Field label="Ascent status" pin={pin('status')}>
+      {/* No pinning status while signed out — it can't filter, so a pinned nav control would be
+          dead weight (and FilterPillBar hides an already-pinned status control when signed out). */}
+      <Field label="Ascent status" pin={signedOut ? undefined : pin('status')}>
         {session ? (
           <div className="space-y-2">
             {session.state === 'paused' && (

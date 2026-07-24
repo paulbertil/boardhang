@@ -30,6 +30,8 @@ interface FilterPillBarProps {
   inSession: boolean
   /** Signed in AND ascents loaded → status actually filters; gates status. */
   statusReady: boolean
+  /** Definitively signed out → status can't filter, so a pinned status control is suppressed. */
+  signedOut: boolean
   /** This board's live lists — drives the "Lists" control (hidden when empty, R4). */
   boardLists: SavedList[]
   /** Which board's pinned set to read/write. */
@@ -45,6 +47,7 @@ export function FilterPillBar({
   onChange,
   inSession,
   statusReady,
+  signedOut,
   boardLists,
   layoutId,
   gradeSpan,
@@ -63,7 +66,7 @@ export function FilterPillBar({
   // a session.) The divider only shows when there's a left group AND chips to divide from it.
   const hasPinnedControls = pinned.some((id) => {
     if (id === 'lists') return boardLists.length > 0
-    if (id === 'status') return !inSession
+    if (id === 'status') return !inSession && !signedOut
     return true
   })
 
@@ -128,8 +131,9 @@ export function FilterPillBar({
             )
           case 'status':
             // In a collab session status is per-member (not single-user statusFilters), so a
-            // single-user Status control would be misleading — suppress it, like its chip.
-            if (inSession) return null
+            // single-user Status control would be misleading — suppress it, like its chip. Also
+            // suppress when signed out (status can't filter, and it can't be pinned there).
+            if (inSession || signedOut) return null
             return (
               <FacetControlPopover
                 key={facet.id}

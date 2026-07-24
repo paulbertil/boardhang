@@ -311,6 +311,7 @@ export function CatalogScreen() {
             onChange={setFilters}
             inSession={sessionForBoard !== null}
             statusReady={statusReady}
+            signedOut={signedOut}
             boardLists={boardLists}
             layoutId={board.layoutId}
             gradeSpan={gradeSpan}
